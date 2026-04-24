@@ -1,0 +1,10 @@
+[onboard]
+ip = "192.168.1.50"
+telemetry_port = 14550
+command_port = 14551
+video_port = 5600
+
+[connection]
+telemetry_timeout_ms = 2000
+cmd_ack_timeout_ms = 1000
+cmd_retry_count = 3
