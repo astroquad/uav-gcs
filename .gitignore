@@ -1,0 +1,50 @@
+# CMake build directories
+build/
+cmake-build-*/
+out/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+compile_commands.json
+install_manifest.txt
+
+# Compiled artifacts
+*.a
+*.dll
+*.dylib
+*.exe
+*.ilk
+*.lib
+*.o
+*.obj
+*.pdb
+*.so
+
+# Runtime logs
+logs/*
+!logs/.gitkeep
+*.log
+
+# Generated telemetry/log replay outputs
+test_data/generated/
+test_data/tmp/
+
+# Coverage and test outputs
+coverage/
+*.gcda
+*.gcno
+*.profraw
+*.profdata
+
+# Editor and OS files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

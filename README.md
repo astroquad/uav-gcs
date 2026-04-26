@@ -24,6 +24,22 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
+### Windows PowerShell
+
+With the default Visual Studio CMake generator:
+
+```powershell
+cmake -S . -B build
+cmake --build build --config Release
+```
+
+With Ninja:
+
+```powershell
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+
 ## Run Telemetry Receiver
 
 ```bash
@@ -32,6 +48,16 @@ cmake --build build
 
 On Windows with a multi-config generator, the executable may be under
 `build/Release/uav_gcs.exe` or `build/Debug/uav_gcs.exe`.
+
+```powershell
+.\build\Release\uav_gcs.exe --config config
+```
+
+If using Ninja on Windows:
+
+```powershell
+.\build\uav_gcs.exe --config config
+```
 
 ## Local Mock Test
 
@@ -45,6 +71,13 @@ Send mock onboard telemetry in another terminal:
 
 ```bash
 ./build/mock_onboard --gcs-ip 127.0.0.1 --count 5
+```
+
+On Windows PowerShell with the default Visual Studio CMake generator:
+
+```powershell
+.\build\Release\uav_gcs.exe --config config --count 5
+.\build\Release\mock_onboard.exe --gcs-ip 127.0.0.1 --count 5
 ```
 
 ## Pi Bring-Up Order
