@@ -1,6 +1,7 @@
 #include "app/VideoViewerApp.hpp"
 
 #include "ui/VideoWindow.hpp"
+#include "video/GcsDiscoveryBeacon.hpp"
 #include "video/UdpMjpegReceiver.hpp"
 
 #include <algorithm>
@@ -17,6 +18,9 @@ int VideoViewerApp::run(const VideoViewerOptions& options)
                   << options.port << ": " << receiver.lastError() << "\n";
         return 1;
     }
+
+    video::GcsDiscoveryBeacon beacon;
+    beacon.start(options.port);
 
     ui::VideoWindow window(options.title);
     window.showStatus("waiting for video stream...");

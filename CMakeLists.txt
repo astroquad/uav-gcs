@@ -82,6 +82,7 @@ endif()
 
 if(GCS_VIDEO_UI_SOURCE)
     add_library(gcs_video STATIC
+        src/video/GcsDiscoveryBeacon.cpp
         src/video/JpegFrameReassembler.cpp
         src/video/UdpMjpegReceiver.cpp
         src/video/VideoPacket.cpp
