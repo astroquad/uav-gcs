@@ -82,6 +82,9 @@ If using Ninja on Windows:
 ```
 
 Start this before running `uav-onboard/build/video_streamer` on the Raspberry Pi.
+While this video receiver is running, it broadcasts a small discovery beacon.
+With the onboard default config, `video_streamer` uses that beacon to discover
+the laptop IP and then sends video by unicast.
 
 ## Local Mock Test
 
@@ -109,9 +112,11 @@ On Windows PowerShell with the default Visual Studio CMake generator:
 1. Build and start this GCS receiver on the laptop.
 2. Build and start `uav_gcs_video` on the laptop if camera video is needed.
 3. Run `uav-onboard/build/video_streamer --source rpicam --config config` on the Pi.
+   It should print `discovered GCS video receiver at <ip>:5600`.
 4. Run `uav-onboard/build/uav_onboard --config config --count 10` on the Pi.
 5. Confirm this GCS prints `TELEMETRY` packets with increasing `seq` values.
 
 The onboard default sends telemetry/video to IPv4 broadcast
 `255.255.255.255`, so the laptop IP usually does not need to be edited. If the
-network blocks broadcast, override the destination with `--gcs-ip <laptop-ip>`.
+network blocks discovery or broadcast, override the video destination with
+`--gcs-ip <laptop-ip>`.
