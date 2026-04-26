@@ -59,6 +59,30 @@ If using Ninja on Windows:
 .\build\uav_gcs.exe --config config
 ```
 
+## Run Video Receiver
+
+`uav_gcs_video` uses OpenCV with `core`, `imgcodecs`, `highgui`, and `imgproc`
+when OpenCV is available to CMake. On Windows, if OpenCV is not installed, the
+build uses a Win32/WIC fallback video window so the target is still built.
+
+```bash
+./build/uav_gcs_video --config config
+```
+
+On Windows with a multi-config generator:
+
+```powershell
+.\build\Release\uav_gcs_video.exe --config config
+```
+
+If using Ninja on Windows:
+
+```powershell
+.\build\uav_gcs_video.exe --config config
+```
+
+Start this before running `uav-onboard/build/video_streamer` on the Raspberry Pi.
+
 ## Local Mock Test
 
 Start the receiver in one terminal:
@@ -83,8 +107,11 @@ On Windows PowerShell with the default Visual Studio CMake generator:
 ## Pi Bring-Up Order
 
 1. Build and start this GCS receiver on the laptop.
-2. Find the laptop IP address on the same Wi-Fi network.
-3. Set the Raspberry Pi `uav-onboard/config/network.toml` `[gcs].ip` to that IP.
-4. Run `uav-onboard/build/camera_preview` on the Pi to validate the camera.
-5. Run `uav-onboard/build/uav_onboard --config config --count 10` on the Pi.
-6. Confirm this GCS prints `TELEMETRY` packets with increasing `seq` values.
+2. Build and start `uav_gcs_video` on the laptop if camera video is needed.
+3. Run `uav-onboard/build/video_streamer --source rpicam --config config` on the Pi.
+4. Run `uav-onboard/build/uav_onboard --config config --count 10` on the Pi.
+5. Confirm this GCS prints `TELEMETRY` packets with increasing `seq` values.
+
+The onboard default sends telemetry/video to IPv4 broadcast
+`255.255.255.255`, so the laptop IP usually does not need to be edited. If the
+network blocks broadcast, override the destination with `--gcs-ip <laptop-ip>`.

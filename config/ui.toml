@@ -6,3 +6,8 @@ height = 800
 show_video = true
 show_vision_debug = true
 show_event_log = true
+
+[video_window]
+title = "Astroquad Camera"
+timeout_ms = 2000
+show_latency = true

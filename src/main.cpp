@@ -86,6 +86,7 @@ int main(int argc, char** argv)
               << "\n";
 
     int received_count = 0;
+    gcs::protocol::TelemetryStats stats;
     while (options.count == 0 || received_count < options.count) {
         std::string payload;
         if (!receiver.receive(payload, config.telemetry_timeout_ms)) {
@@ -106,14 +107,19 @@ int main(int argc, char** argv)
             }
             continue;
         }
+        stats.observe(*message);
 
         std::cout << "TELEMETRY"
                   << " seq=" << message->seq
                   << " timestamp_ms=" << message->timestamp_ms
                   << " state=" << (message->mission_state.empty() ? "UNKNOWN" : message->mission_state)
-                  << " camera=" << (message->camera_status.empty() ? "UNKNOWN" : message->camera_status)
-                  << " frame=" << message->frame_width << "x" << message->frame_height
-                  << " fps=" << message->measured_fps
+                  << " camera=" << (message->camera.status.empty() ? "UNKNOWN" : message->camera.status)
+                  << " frame=" << message->camera.width << "x" << message->camera.height
+                  << " fps=" << message->camera.fps
+                  << " grid=" << message->grid.row << "," << message->grid.col
+                  << " dropped=" << stats.dropped_packets
+                  << " duplicate=" << stats.duplicate_packets
+                  << " out_of_order=" << stats.out_of_order_packets
                   << "\n";
         if (options.print_raw) {
             std::cout << payload << "\n";
