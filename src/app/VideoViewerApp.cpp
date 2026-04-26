@@ -27,22 +27,22 @@ int VideoViewerApp::run(const VideoViewerOptions& options)
               << "  press q or ESC in the video window to exit\n";
 
     auto last_frame_time = std::chrono::steady_clock::now();
-    bool waiting_status_visible = true;
+    bool received_any_frame = false;
     while (true) {
         const int poll_timeout_ms = std::clamp(options.timeout_ms, 1, 50);
         const auto frame = receiver.receiveFrame(poll_timeout_ms);
         if (frame) {
             last_frame_time = std::chrono::steady_clock::now();
-            waiting_status_visible = false;
+            received_any_frame = true;
             if (!window.showFrame(*frame)) {
-                window.showStatus("failed to decode JPEG frame");
+                std::cerr << "video display warning: failed to decode JPEG frame\n";
             }
         } else if (receiver.lastError() == "timeout") {
             const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - last_frame_time);
-            if (!waiting_status_visible && elapsed.count() >= options.timeout_ms) {
+            if (!received_any_frame && elapsed.count() >= options.timeout_ms) {
                 window.showStatus("waiting for video stream...");
-                waiting_status_visible = true;
+                last_frame_time = std::chrono::steady_clock::now();
             }
         } else {
             std::cerr << "video receive warning: " << receiver.lastError() << "\n";

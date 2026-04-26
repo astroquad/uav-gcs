@@ -85,10 +85,14 @@ void paintWindow(HWND hwnd, VideoWindowState& state)
     const int client_width = std::max(1L, client.right - client.left);
     const int client_height = std::max(1L, client.bottom - client.top);
 
-    HBRUSH black = reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
-    FillRect(dc, &client, black);
+    HDC memory_dc = CreateCompatibleDC(dc);
+    HBITMAP memory_bitmap = CreateCompatibleBitmap(dc, client_width, client_height);
+    HGDIOBJ old_bitmap = SelectObject(memory_dc, memory_bitmap);
 
-    SetBkMode(dc, TRANSPARENT);
+    HBRUSH black = reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
+    FillRect(memory_dc, &client, black);
+
+    SetBkMode(memory_dc, TRANSPARENT);
 
     if (!state.bgra.empty() && state.width > 0 && state.height > 0) {
         BITMAPINFO info {};
@@ -112,7 +116,7 @@ void paintWindow(HWND hwnd, VideoWindowState& state)
         const int draw_y = (client_height - draw_height) / 2;
 
         StretchDIBits(
-            dc,
+            memory_dc,
             draw_x,
             draw_y,
             draw_width,
@@ -126,14 +130,19 @@ void paintWindow(HWND hwnd, VideoWindowState& state)
             DIB_RGB_COLORS,
             SRCCOPY);
 
-        SetTextColor(dc, RGB(0, 255, 0));
+        SetTextColor(memory_dc, RGB(0, 255, 0));
         RECT text_rect {12, 10, client_width - 12, 40};
-        DrawTextW(dc, state.overlay.c_str(), -1, &text_rect, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+        DrawTextW(memory_dc, state.overlay.c_str(), -1, &text_rect, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
     } else {
-        SetTextColor(dc, RGB(255, 220, 0));
+        SetTextColor(memory_dc, RGB(255, 220, 0));
         RECT text_rect {16, 0, client_width - 16, client_height};
-        DrawTextW(dc, state.status.c_str(), -1, &text_rect, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+        DrawTextW(memory_dc, state.status.c_str(), -1, &text_rect, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
     }
+
+    BitBlt(dc, 0, 0, client_width, client_height, memory_dc, 0, 0, SRCCOPY);
+    SelectObject(memory_dc, old_bitmap);
+    DeleteObject(memory_bitmap);
+    DeleteDC(memory_dc);
 
     EndPaint(hwnd, &paint);
 }
@@ -174,6 +183,8 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpara
             return 0;
         }
         break;
+    case WM_ERASEBKGND:
+        return 1;
     default:
         break;
     }
