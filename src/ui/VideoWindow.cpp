@@ -5,8 +5,10 @@
 #include <opencv2/imgproc.hpp>
 
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <utility>
+#include <vector>
 
 namespace gcs::ui {
 namespace {
@@ -17,6 +19,18 @@ std::int64_t unixTimestampMs()
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         now.time_since_epoch());
     return ms.count();
+}
+
+cv::Scalar toScalar(const overlay::Color& color)
+{
+    return cv::Scalar(color.b, color.g, color.r);
+}
+
+cv::Point toPoint(const overlay::Point2f& point)
+{
+    return cv::Point(
+        static_cast<int>(std::lround(point.x)),
+        static_cast<int>(std::lround(point.y)));
 }
 
 } // namespace
@@ -34,6 +48,13 @@ VideoWindow::~VideoWindow()
 
 bool VideoWindow::showFrame(const video::JpegFrame& frame)
 {
+    return showFrame(frame, {});
+}
+
+bool VideoWindow::showFrame(
+    const video::JpegFrame& frame,
+    const std::vector<overlay::OverlayPrimitive>& overlays)
+{
     const cv::Mat encoded(1, static_cast<int>(frame.data.size()), CV_8UC1, const_cast<std::uint8_t*>(frame.data.data()));
     cv::Mat image = cv::imdecode(encoded, cv::IMREAD_COLOR);
     if (image.empty()) {
@@ -50,6 +71,41 @@ bool VideoWindow::showFrame(const video::JpegFrame& frame)
         cv::Scalar(0, 255, 0),
         1,
         cv::LINE_AA);
+
+    for (const auto& overlay : overlays) {
+        switch (overlay.type) {
+        case overlay::OverlayPrimitive::Type::Line:
+            cv::line(
+                image,
+                toPoint(overlay.line.start),
+                toPoint(overlay.line.end),
+                toScalar(overlay.line.color),
+                overlay.line.thickness,
+                cv::LINE_AA);
+            break;
+        case overlay::OverlayPrimitive::Type::Circle:
+            cv::circle(
+                image,
+                toPoint(overlay.circle.center),
+                static_cast<int>(std::lround(overlay.circle.radius)),
+                toScalar(overlay.circle.color),
+                overlay.circle.thickness,
+                cv::LINE_AA);
+            break;
+        case overlay::OverlayPrimitive::Type::Text:
+            cv::putText(
+                image,
+                overlay.text.text,
+                toPoint(overlay.text.origin),
+                cv::FONT_HERSHEY_SIMPLEX,
+                overlay.text.scale,
+                toScalar(overlay.text.color),
+                overlay.text.thickness,
+                cv::LINE_AA);
+            break;
+        }
+    }
+
     cv::imshow(title_, image);
     return true;
 }

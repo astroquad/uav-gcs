@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -29,6 +30,7 @@ struct VideoWindowState {
     std::vector<std::uint8_t> bgra;
     std::wstring status;
     std::wstring overlay;
+    std::vector<overlay::OverlayPrimitive> overlays;
 };
 
 std::int64_t unixTimestampMs()
@@ -72,6 +74,128 @@ void releaseCom(T*& object)
     if (object != nullptr) {
         object->Release();
         object = nullptr;
+    }
+}
+
+COLORREF toColorRef(const overlay::Color& color)
+{
+    return RGB(color.r, color.g, color.b);
+}
+
+int scaledX(const overlay::Point2f& point, int draw_x, int draw_width, int image_width)
+{
+    return draw_x + static_cast<int>(std::lround(point.x * draw_width / std::max(1, image_width)));
+}
+
+int scaledY(const overlay::Point2f& point, int draw_y, int draw_height, int image_height)
+{
+    return draw_y + static_cast<int>(std::lround(point.y * draw_height / std::max(1, image_height)));
+}
+
+void drawOverlayLine(
+    HDC dc,
+    const overlay::OverlayLine& line,
+    int draw_x,
+    int draw_y,
+    int draw_width,
+    int draw_height,
+    int image_width,
+    int image_height)
+{
+    HPEN pen = CreatePen(
+        PS_SOLID,
+        std::max(1, line.thickness),
+        toColorRef(line.color));
+    HGDIOBJ old_pen = SelectObject(dc, pen);
+    MoveToEx(
+        dc,
+        scaledX(line.start, draw_x, draw_width, image_width),
+        scaledY(line.start, draw_y, draw_height, image_height),
+        nullptr);
+    LineTo(
+        dc,
+        scaledX(line.end, draw_x, draw_width, image_width),
+        scaledY(line.end, draw_y, draw_height, image_height));
+    SelectObject(dc, old_pen);
+    DeleteObject(pen);
+}
+
+void drawOverlayCircle(
+    HDC dc,
+    const overlay::OverlayCircle& circle,
+    int draw_x,
+    int draw_y,
+    int draw_width,
+    int draw_height,
+    int image_width,
+    int image_height)
+{
+    const int center_x = scaledX(circle.center, draw_x, draw_width, image_width);
+    const int center_y = scaledY(circle.center, draw_y, draw_height, image_height);
+    const int radius_x = std::max(1, static_cast<int>(std::lround(circle.radius * draw_width / std::max(1, image_width))));
+    const int radius_y = std::max(1, static_cast<int>(std::lround(circle.radius * draw_height / std::max(1, image_height))));
+
+    if (circle.thickness < 0) {
+        HBRUSH brush = CreateSolidBrush(toColorRef(circle.color));
+        HGDIOBJ old_brush = SelectObject(dc, brush);
+        HGDIOBJ old_pen = SelectObject(dc, GetStockObject(NULL_PEN));
+        Ellipse(dc, center_x - radius_x, center_y - radius_y, center_x + radius_x, center_y + radius_y);
+        SelectObject(dc, old_pen);
+        SelectObject(dc, old_brush);
+        DeleteObject(brush);
+        return;
+    }
+
+    HPEN pen = CreatePen(
+        PS_SOLID,
+        std::max(1, circle.thickness),
+        toColorRef(circle.color));
+    HGDIOBJ old_pen = SelectObject(dc, pen);
+    HGDIOBJ old_brush = SelectObject(dc, GetStockObject(HOLLOW_BRUSH));
+    Ellipse(dc, center_x - radius_x, center_y - radius_y, center_x + radius_x, center_y + radius_y);
+    SelectObject(dc, old_brush);
+    SelectObject(dc, old_pen);
+    DeleteObject(pen);
+}
+
+void drawOverlayText(
+    HDC dc,
+    const overlay::OverlayText& text,
+    int draw_x,
+    int draw_y,
+    int draw_width,
+    int draw_height,
+    int image_width,
+    int image_height)
+{
+    SetTextColor(dc, toColorRef(text.color));
+    const int x = scaledX(text.origin, draw_x, draw_width, image_width);
+    const int y = scaledY(text.origin, draw_y, draw_height, image_height);
+    RECT text_rect {x, y - 18, x + 480, y + 42};
+    const std::wstring wide_text = widen(text.text);
+    DrawTextW(dc, wide_text.c_str(), -1, &text_rect, DT_LEFT | DT_WORDBREAK);
+}
+
+void drawOverlays(
+    HDC dc,
+    const VideoWindowState& state,
+    int draw_x,
+    int draw_y,
+    int draw_width,
+    int draw_height)
+{
+    for (const auto& primitive : state.overlays) {
+        switch (primitive.type) {
+        case overlay::OverlayPrimitive::Type::Line:
+            drawOverlayLine(dc, primitive.line, draw_x, draw_y, draw_width, draw_height, state.width, state.height);
+            break;
+        case overlay::OverlayPrimitive::Type::Circle:
+            drawOverlayCircle(dc, primitive.circle, draw_x, draw_y, draw_width, draw_height, state.width, state.height);
+            break;
+        case overlay::OverlayPrimitive::Type::Text:
+            drawOverlayText(dc, primitive.text, draw_x, draw_y, draw_width, draw_height, state.width, state.height);
+            break;
+        }
     }
 }
 
@@ -133,6 +257,7 @@ void paintWindow(HWND hwnd, VideoWindowState& state)
         SetTextColor(memory_dc, RGB(0, 255, 0));
         RECT text_rect {12, 10, client_width - 12, 40};
         DrawTextW(memory_dc, state.overlay.c_str(), -1, &text_rect, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+        drawOverlays(memory_dc, state, draw_x, draw_y, draw_width, draw_height);
     } else {
         SetTextColor(memory_dc, RGB(255, 220, 0));
         RECT text_rect {16, 0, client_width - 16, client_height};
@@ -329,6 +454,13 @@ VideoWindow::~VideoWindow()
 
 bool VideoWindow::showFrame(const video::JpegFrame& frame)
 {
+    return showFrame(frame, {});
+}
+
+bool VideoWindow::showFrame(
+    const video::JpegFrame& frame,
+    const std::vector<overlay::OverlayPrimitive>& overlays)
+{
     auto& state = *static_cast<VideoWindowState*>(native_state_);
     if (state.closed) {
         return false;
@@ -344,6 +476,7 @@ bool VideoWindow::showFrame(const video::JpegFrame& frame)
     state.width = width;
     state.height = height;
     state.bgra = std::move(pixels);
+    state.overlays = overlays;
     const auto latency_ms = unixTimestampMs() - static_cast<std::int64_t>(frame.timestamp_ms);
     state.overlay = widen(
         "frame " + std::to_string(frame.frame_id) +
@@ -361,6 +494,7 @@ void VideoWindow::showStatus(const std::string& status)
     auto& state = *static_cast<VideoWindowState*>(native_state_);
     state.status = widen(status);
     state.bgra.clear();
+    state.overlays.clear();
     state.width = 0;
     state.height = 0;
     if (state.hwnd != nullptr) {

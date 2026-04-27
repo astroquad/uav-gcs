@@ -86,6 +86,26 @@ While this video receiver is running, it broadcasts a small discovery beacon.
 With the onboard default config, `video_streamer` uses that beacon to discover
 the laptop IP and then sends video by unicast.
 
+## Run Vision Debug Receiver
+
+Use this for the current ArUco development stage. It receives the raw MJPEG
+camera stream and marker telemetry at the same time, draws marker overlays on
+the GCS side, and prints marker logs periodically.
+
+```bash
+./build/uav_gcs_vision_debug --config config
+```
+
+On Windows with Ninja:
+
+```powershell
+.\build\uav_gcs_vision_debug.exe --config config
+```
+
+Start this before running `uav-onboard/build/vision_debug_node` on the
+Raspberry Pi. The onboard stream remains raw camera JPEG; marker boxes, labels,
+and direction arrows are drawn only by GCS.
+
 ## Local Mock Test
 
 Start the receiver in one terminal:

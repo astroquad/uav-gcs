@@ -2,6 +2,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include <cstddef>
+
 namespace gcs::protocol {
 namespace {
 
@@ -20,6 +22,16 @@ T valueOr(const nlohmann::json& object, const char* key, T fallback)
     } catch (const nlohmann::json::exception&) {
         return fallback;
     }
+}
+
+Point2f pointOr(const nlohmann::json& object, Point2f fallback = {})
+{
+    if (!object.is_object()) {
+        return fallback;
+    }
+    fallback.x = valueOr<double>(object, "x", fallback.x);
+    fallback.y = valueOr<double>(object, "y", fallback.y);
+    return fallback;
 }
 
 } // namespace
@@ -111,6 +123,38 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
             valueOr<double>(*vision, "intersection_score", message.vision.intersection_score);
         message.vision.marker_detected = valueOr<bool>(*vision, "marker_detected", message.vision.marker_detected);
         message.vision.marker_id = valueOr<int>(*vision, "marker_id", message.vision.marker_id);
+        message.vision.marker_count = valueOr<int>(*vision, "marker_count", message.vision.marker_count);
+
+        if (const auto markers = vision->find("markers");
+            markers != vision->end() && markers->is_array()) {
+            message.vision.markers.clear();
+            for (const auto& marker_json : *markers) {
+                if (!marker_json.is_object()) {
+                    continue;
+                }
+
+                MarkerTelemetry marker;
+                marker.id = valueOr<int>(marker_json, "id", marker.id);
+                if (const auto center = marker_json.find("center_px"); center != marker_json.end()) {
+                    marker.center_px = pointOr(*center);
+                }
+                if (const auto corners = marker_json.find("corners_px");
+                    corners != marker_json.end() && corners->is_array() && corners->size() >= marker.corners_px.size()) {
+                    for (std::size_t index = 0; index < marker.corners_px.size(); ++index) {
+                        marker.corners_px[index] = pointOr((*corners)[index]);
+                    }
+                }
+                marker.orientation_deg = valueOr<double>(marker_json, "orientation_deg", marker.orientation_deg);
+                if (marker.id >= 0) {
+                    message.vision.markers.push_back(marker);
+                }
+            }
+            message.vision.marker_count = static_cast<int>(message.vision.markers.size());
+            message.vision.marker_detected = !message.vision.markers.empty();
+            if (!message.vision.markers.empty()) {
+                message.vision.marker_id = message.vision.markers.front().id;
+            }
+        }
     }
 
     if (const auto grid = json.find("grid"); grid != json.end()) {
@@ -128,6 +172,8 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
     if (const auto debug = json.find("debug"); debug != json.end()) {
         message.debug.processing_latency_ms =
             valueOr<double>(*debug, "processing_latency_ms", message.debug.processing_latency_ms);
+        message.debug.aruco_latency_ms =
+            valueOr<double>(*debug, "aruco_latency_ms", message.debug.aruco_latency_ms);
     }
 
     return message;

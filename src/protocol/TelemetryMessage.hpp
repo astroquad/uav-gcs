@@ -1,10 +1,24 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace gcs::protocol {
+
+struct Point2f {
+    double x = 0.0;
+    double y = 0.0;
+};
+
+struct MarkerTelemetry {
+    int id = -1;
+    Point2f center_px;
+    std::array<Point2f, 4> corners_px {};
+    double orientation_deg = 0.0;
+};
 
 struct CameraTelemetry {
     std::string status;
@@ -22,6 +36,8 @@ struct VisionTelemetry {
     double intersection_score = 0.0;
     bool marker_detected = false;
     int marker_id = -1;
+    int marker_count = 0;
+    std::vector<MarkerTelemetry> markers;
 };
 
 struct GridTelemetry {
@@ -32,6 +48,7 @@ struct GridTelemetry {
 
 struct DebugTelemetry {
     double processing_latency_ms = 0.0;
+    double aruco_latency_ms = 0.0;
 };
 
 struct TelemetryMessage {

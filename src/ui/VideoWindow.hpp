@@ -1,8 +1,10 @@
 #pragma once
 
+#include "overlay/OverlayPrimitive.hpp"
 #include "video/JpegFrameReassembler.hpp"
 
 #include <string>
+#include <vector>
 
 namespace gcs::ui {
 
@@ -15,6 +17,9 @@ public:
     VideoWindow& operator=(const VideoWindow&) = delete;
 
     bool showFrame(const video::JpegFrame& frame);
+    bool showFrame(
+        const video::JpegFrame& frame,
+        const std::vector<overlay::OverlayPrimitive>& overlays);
     void showStatus(const std::string& status);
     bool shouldClose(int wait_ms);
 
