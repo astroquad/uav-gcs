@@ -106,6 +106,11 @@ Start this before running `uav-onboard/build/vision_debug_node` on the
 Raspberry Pi. The onboard stream remains raw camera JPEG; marker boxes, labels,
 and direction arrows are drawn only by GCS.
 
+If the Pi discovers the GCS IP but this app still shows no telemetry packets,
+check Windows Defender Firewall. `uav_gcs_vision_debug.exe` needs inbound UDP
+allow rules for the current network profile, the same as `uav_gcs.exe` and
+`uav_gcs_video.exe`.
+
 ## Local Mock Test
 
 Start the receiver in one terminal:
