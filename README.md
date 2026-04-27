@@ -111,7 +111,9 @@ drawn only by GCS.
 Expected live overlay behavior:
 
 - ArUco markers: marker box, corner points, center point, direction arrow, label.
-- Line tracing: magenta contour/border and green tracking point.
+- Line tracing: magenta selected line-branch contour/border and green tracking
+  point. Very wide glare or intersection spans can be filtered by onboard
+  before GCS draws the contour.
 - If both detectors are enabled, both overlays are shown in the same video
   window using the same frame sequence synchronization.
 - The separate vision log window shows packet stats, marker state, line state,
