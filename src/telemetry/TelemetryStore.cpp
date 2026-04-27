@@ -24,8 +24,22 @@ void TelemetryStore::observe(const protocol::TelemetryMessage& message)
     frame.width = message.camera.width;
     frame.height = message.camera.height;
     frame.processing_latency_ms = message.debug.processing_latency_ms;
+    frame.read_frame_ms = message.debug.read_frame_ms;
+    frame.jpeg_decode_ms = message.debug.jpeg_decode_ms;
     frame.aruco_latency_ms = message.debug.aruco_latency_ms;
     frame.line_latency_ms = message.debug.line_latency_ms;
+    frame.telemetry_build_ms = message.debug.telemetry_build_ms;
+    frame.telemetry_send_ms = message.debug.telemetry_send_ms;
+    frame.video_submit_ms = message.debug.video_submit_ms;
+    frame.telemetry_bytes = message.debug.telemetry_bytes;
+    frame.video_jpeg_bytes = message.debug.video_jpeg_bytes;
+    frame.video_sent_frames = message.debug.video_sent_frames;
+    frame.video_dropped_frames = message.debug.video_dropped_frames;
+    frame.line_mask_count = message.debug.line_mask_count;
+    frame.line_contours_found = message.debug.line_contours_found;
+    frame.line_candidates_evaluated = message.debug.line_candidates_evaluated;
+    frame.line_roi_pixels = message.debug.line_roi_pixels;
+    frame.line_selected_contour_points = message.debug.line_selected_contour_points;
     frame.markers = message.vision.markers;
     frame.line = message.vision.line;
 

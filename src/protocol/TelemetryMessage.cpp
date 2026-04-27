@@ -125,17 +125,33 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
             line != vision->end() && line->is_object()) {
             message.vision.line.detected =
                 valueOr<bool>(*line, "detected", message.vision.line.detected);
+            message.vision.line.raw_detected =
+                valueOr<bool>(*line, "raw_detected", message.vision.line.raw_detected);
+            message.vision.line.filtered =
+                valueOr<bool>(*line, "filtered", message.vision.line.filtered);
+            message.vision.line.held =
+                valueOr<bool>(*line, "held", message.vision.line.held);
+            message.vision.line.rejected_jump =
+                valueOr<bool>(*line, "rejected_jump", message.vision.line.rejected_jump);
             if (const auto tracking_point = line->find("tracking_point_px");
                 tracking_point != line->end()) {
                 message.vision.line.tracking_point_px = pointOr(*tracking_point);
+            }
+            if (const auto raw_tracking_point = line->find("raw_tracking_point_px");
+                raw_tracking_point != line->end()) {
+                message.vision.line.raw_tracking_point_px = pointOr(*raw_tracking_point);
             }
             if (const auto centroid = line->find("centroid_px"); centroid != line->end()) {
                 message.vision.line.centroid_px = pointOr(*centroid);
             }
             message.vision.line.center_offset_px =
                 valueOr<double>(*line, "center_offset_px", message.vision.line.center_offset_px);
+            message.vision.line.raw_center_offset_px =
+                valueOr<double>(*line, "raw_center_offset_px", message.vision.line.raw_center_offset_px);
             message.vision.line.angle_deg =
                 valueOr<double>(*line, "angle_deg", message.vision.line.angle_deg);
+            message.vision.line.raw_angle_deg =
+                valueOr<double>(*line, "raw_angle_deg", message.vision.line.raw_angle_deg);
             message.vision.line.confidence =
                 valueOr<double>(*line, "confidence", message.vision.line.confidence);
             if (const auto contour = line->find("contour_px");
@@ -205,10 +221,38 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
     if (const auto debug = json.find("debug"); debug != json.end()) {
         message.debug.processing_latency_ms =
             valueOr<double>(*debug, "processing_latency_ms", message.debug.processing_latency_ms);
+        message.debug.read_frame_ms =
+            valueOr<double>(*debug, "read_frame_ms", message.debug.read_frame_ms);
+        message.debug.jpeg_decode_ms =
+            valueOr<double>(*debug, "jpeg_decode_ms", message.debug.jpeg_decode_ms);
         message.debug.aruco_latency_ms =
             valueOr<double>(*debug, "aruco_latency_ms", message.debug.aruco_latency_ms);
         message.debug.line_latency_ms =
             valueOr<double>(*debug, "line_latency_ms", message.debug.line_latency_ms);
+        message.debug.telemetry_build_ms =
+            valueOr<double>(*debug, "telemetry_build_ms", message.debug.telemetry_build_ms);
+        message.debug.telemetry_send_ms =
+            valueOr<double>(*debug, "telemetry_send_ms", message.debug.telemetry_send_ms);
+        message.debug.video_submit_ms =
+            valueOr<double>(*debug, "video_submit_ms", message.debug.video_submit_ms);
+        message.debug.telemetry_bytes =
+            valueOr<std::uint64_t>(*debug, "telemetry_bytes", message.debug.telemetry_bytes);
+        message.debug.video_jpeg_bytes =
+            valueOr<std::uint64_t>(*debug, "video_jpeg_bytes", message.debug.video_jpeg_bytes);
+        message.debug.video_sent_frames =
+            valueOr<std::uint64_t>(*debug, "video_sent_frames", message.debug.video_sent_frames);
+        message.debug.video_dropped_frames =
+            valueOr<std::uint64_t>(*debug, "video_dropped_frames", message.debug.video_dropped_frames);
+        message.debug.line_mask_count =
+            valueOr<int>(*debug, "line_mask_count", message.debug.line_mask_count);
+        message.debug.line_contours_found =
+            valueOr<int>(*debug, "line_contours_found", message.debug.line_contours_found);
+        message.debug.line_candidates_evaluated =
+            valueOr<int>(*debug, "line_candidates_evaluated", message.debug.line_candidates_evaluated);
+        message.debug.line_roi_pixels =
+            valueOr<int>(*debug, "line_roi_pixels", message.debug.line_roi_pixels);
+        message.debug.line_selected_contour_points =
+            valueOr<int>(*debug, "line_selected_contour_points", message.debug.line_selected_contour_points);
     }
 
     return message;

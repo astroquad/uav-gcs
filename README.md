@@ -117,8 +117,9 @@ Expected live overlay behavior:
 - If both detectors are enabled, both overlays are shown in the same video
   window using the same frame sequence synchronization.
 - The separate vision log window shows packet stats, marker state, line state,
-  and detector latency. If the log window backend is unavailable, the same text
-  is printed to the terminal.
+  detector latency, onboard read/decode/JSON/send/video timing, line contour
+  workload counters, video queue drops, and raw-vs-filtered line state. If the
+  log window backend is unavailable, the same text is printed to the terminal.
 
 If the Pi discovers the GCS IP but this app still shows no telemetry packets,
 check Windows Defender Firewall. `uav_gcs_vision_debug.exe` needs inbound UDP
