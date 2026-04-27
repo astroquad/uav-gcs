@@ -84,9 +84,12 @@ if(GCS_VIDEO_UI_SOURCE)
     add_library(gcs_video STATIC
         src/app/VideoViewerApp.cpp
         src/app/VisionDebugApp.cpp
+        src/overlay/LineOverlay.cpp
         src/overlay/MarkerOverlay.cpp
         src/telemetry/MarkerLogFormatter.cpp
         src/telemetry/TelemetryStore.cpp
+        src/telemetry/VisionLogFormatter.cpp
+        src/ui/VisionLogWindow.cpp
         src/video/GcsDiscoveryBeacon.cpp
         src/video/JpegFrameReassembler.cpp
         src/video/UdpMjpegReceiver.cpp
@@ -96,7 +99,7 @@ if(GCS_VIDEO_UI_SOURCE)
     target_include_directories(gcs_video PUBLIC src)
     target_link_libraries(gcs_video PUBLIC ${GCS_VIDEO_LIBS})
     if(WIN32)
-        target_link_libraries(gcs_video PUBLIC ws2_32)
+        target_link_libraries(gcs_video PUBLIC ws2_32 user32)
     endif()
 
     add_executable(uav_gcs_video

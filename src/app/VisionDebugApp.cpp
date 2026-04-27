@@ -1,10 +1,12 @@
 #include "app/VisionDebugApp.hpp"
 
 #include "network/UdpTelemetryReceiver.hpp"
+#include "overlay/LineOverlay.hpp"
 #include "overlay/MarkerOverlay.hpp"
 #include "protocol/TelemetryMessage.hpp"
-#include "telemetry/MarkerLogFormatter.hpp"
 #include "telemetry/TelemetryStore.hpp"
+#include "telemetry/VisionLogFormatter.hpp"
+#include "ui/VisionLogWindow.hpp"
 #include "ui/VideoWindow.hpp"
 #include "video/GcsDiscoveryBeacon.hpp"
 #include "video/UdpMjpegReceiver.hpp"
@@ -128,13 +130,14 @@ int VisionDebugApp::run(const VisionDebugOptions& options)
     beacon.start(options.video_port);
 
     ui::VideoWindow window(options.title);
+    ui::VisionLogWindow log_window("Astroquad Vision Log");
     window.showStatus("waiting for video stream...");
 
     std::cout << "uav_gcs_vision_debug\n"
               << "  video UDP port: " << options.video_port << "\n"
               << "  telemetry UDP port: " << options.telemetry_port << "\n"
               << "  video_timeout_ms: " << options.video_timeout_ms << "\n"
-              << "  marker_log_interval_ms: " << options.marker_log_interval_ms << "\n"
+              << "  vision_log_interval_ms: " << options.marker_log_interval_ms << "\n"
               << "  press q or ESC in the video window to exit\n";
 
     auto last_frame_time = std::chrono::steady_clock::now();
@@ -151,9 +154,13 @@ int VisionDebugApp::run(const VisionDebugOptions& options)
             const auto marker_frame = telemetry_store.findForFrame(
                 frame->frame_id,
                 frame->timestamp_ms);
-            const auto overlays = marker_frame
-                ? overlay::buildMarkerOverlays(marker_frame->markers)
-                : std::vector<overlay::OverlayPrimitive> {};
+            std::vector<overlay::OverlayPrimitive> overlays;
+            if (marker_frame) {
+                auto line_overlays = overlay::buildLineOverlays(marker_frame->line);
+                overlays.insert(overlays.end(), line_overlays.begin(), line_overlays.end());
+                auto marker_overlays = overlay::buildMarkerOverlays(marker_frame->markers);
+                overlays.insert(overlays.end(), marker_overlays.begin(), marker_overlays.end());
+            }
 
             if (!window.showFrame(*frame, overlays)) {
                 std::cerr << "video display warning: failed to decode JPEG frame\n";
@@ -178,19 +185,27 @@ int VisionDebugApp::run(const VisionDebugOptions& options)
         if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_log_time).count()
             >= options.marker_log_interval_ms) {
             if (const auto latest = telemetry_store.latest()) {
-                std::cout << telemetry::formatMarkerLog(
+                const auto text = telemetry::formatVisionLog(
                     *latest,
                     telemetry_thread.stats(),
                     unixTimestampMs());
+                if (!log_window.update(text)) {
+                    std::cout << text;
+                }
             } else {
                 const auto stats = telemetry_thread.stats();
-                std::cout << "[marker] no telemetry packets yet"
-                          << " packets=" << stats.received_packets
-                          << " dropped=" << stats.dropped_packets << "\n";
+                const std::string text =
+                    "[vision] no telemetry packets yet packets=" +
+                    std::to_string(stats.received_packets) +
+                    " dropped=" + std::to_string(stats.dropped_packets) + "\n";
+                if (!log_window.update(text)) {
+                    std::cout << text;
+                }
             }
             last_log_time = now;
         }
 
+        log_window.poll();
         if (window.shouldClose(1)) {
             break;
         }

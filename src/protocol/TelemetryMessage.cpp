@@ -117,6 +117,39 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
         message.vision.line_detected = valueOr<bool>(*vision, "line_detected", message.vision.line_detected);
         message.vision.line_offset = valueOr<double>(*vision, "line_offset", message.vision.line_offset);
         message.vision.line_angle = valueOr<double>(*vision, "line_angle", message.vision.line_angle);
+        message.vision.line.detected = message.vision.line_detected;
+        message.vision.line.center_offset_px = message.vision.line_offset;
+        message.vision.line.angle_deg = message.vision.line_angle;
+
+        if (const auto line = vision->find("line");
+            line != vision->end() && line->is_object()) {
+            message.vision.line.detected =
+                valueOr<bool>(*line, "detected", message.vision.line.detected);
+            if (const auto tracking_point = line->find("tracking_point_px");
+                tracking_point != line->end()) {
+                message.vision.line.tracking_point_px = pointOr(*tracking_point);
+            }
+            if (const auto centroid = line->find("centroid_px"); centroid != line->end()) {
+                message.vision.line.centroid_px = pointOr(*centroid);
+            }
+            message.vision.line.center_offset_px =
+                valueOr<double>(*line, "center_offset_px", message.vision.line.center_offset_px);
+            message.vision.line.angle_deg =
+                valueOr<double>(*line, "angle_deg", message.vision.line.angle_deg);
+            message.vision.line.confidence =
+                valueOr<double>(*line, "confidence", message.vision.line.confidence);
+            if (const auto contour = line->find("contour_px");
+                contour != line->end() && contour->is_array()) {
+                message.vision.line.contour_px.clear();
+                for (const auto& point_json : *contour) {
+                    message.vision.line.contour_px.push_back(pointOr(point_json));
+                }
+            }
+            message.vision.line_detected = message.vision.line.detected;
+            message.vision.line_offset = message.vision.line.center_offset_px;
+            message.vision.line_angle = message.vision.line.angle_deg;
+        }
+
         message.vision.intersection_detected =
             valueOr<bool>(*vision, "intersection_detected", message.vision.intersection_detected);
         message.vision.intersection_score =
@@ -174,6 +207,8 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
             valueOr<double>(*debug, "processing_latency_ms", message.debug.processing_latency_ms);
         message.debug.aruco_latency_ms =
             valueOr<double>(*debug, "aruco_latency_ms", message.debug.aruco_latency_ms);
+        message.debug.line_latency_ms =
+            valueOr<double>(*debug, "line_latency_ms", message.debug.line_latency_ms);
     }
 
     return message;

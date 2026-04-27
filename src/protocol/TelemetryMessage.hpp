@@ -20,6 +20,16 @@ struct MarkerTelemetry {
     double orientation_deg = 0.0;
 };
 
+struct LineTelemetry {
+    bool detected = false;
+    Point2f tracking_point_px;
+    Point2f centroid_px;
+    double center_offset_px = 0.0;
+    double angle_deg = 0.0;
+    double confidence = 0.0;
+    std::vector<Point2f> contour_px;
+};
+
 struct CameraTelemetry {
     std::string status;
     int width = 0;
@@ -32,6 +42,7 @@ struct VisionTelemetry {
     bool line_detected = false;
     double line_offset = 0.0;
     double line_angle = 0.0;
+    LineTelemetry line;
     bool intersection_detected = false;
     double intersection_score = 0.0;
     bool marker_detected = false;
@@ -49,6 +60,7 @@ struct GridTelemetry {
 struct DebugTelemetry {
     double processing_latency_ms = 0.0;
     double aruco_latency_ms = 0.0;
+    double line_latency_ms = 0.0;
 };
 
 struct TelemetryMessage {

@@ -18,14 +18,16 @@ void TelemetryStore::observe(const protocol::TelemetryMessage& message)
         return;
     }
 
-    MarkerFrame frame;
+    VisionFrame frame;
     frame.frame_seq = message.camera.frame_seq;
     frame.timestamp_ms = message.timestamp_ms;
     frame.width = message.camera.width;
     frame.height = message.camera.height;
     frame.processing_latency_ms = message.debug.processing_latency_ms;
     frame.aruco_latency_ms = message.debug.aruco_latency_ms;
+    frame.line_latency_ms = message.debug.line_latency_ms;
     frame.markers = message.vision.markers;
+    frame.line = message.vision.line;
 
     std::lock_guard<std::mutex> lock(mutex_);
     frames_.push_back(std::move(frame));
@@ -34,7 +36,7 @@ void TelemetryStore::observe(const protocol::TelemetryMessage& message)
     }
 }
 
-std::optional<MarkerFrame> TelemetryStore::findForFrame(
+std::optional<VisionFrame> TelemetryStore::findForFrame(
     std::uint32_t frame_seq,
     std::uint64_t frame_timestamp_ms,
     int max_age_ms) const
@@ -67,7 +69,7 @@ std::optional<MarkerFrame> TelemetryStore::findForFrame(
     return *best_it;
 }
 
-std::optional<MarkerFrame> TelemetryStore::latest() const
+std::optional<VisionFrame> TelemetryStore::latest() const
 {
     std::lock_guard<std::mutex> lock(mutex_);
     if (frames_.empty()) {

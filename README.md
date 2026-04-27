@@ -88,9 +88,10 @@ the laptop IP and then sends video by unicast.
 
 ## Run Vision Debug Receiver
 
-Use this for the current ArUco development stage. It receives the raw MJPEG
-camera stream and marker telemetry at the same time, draws marker overlays on
-the GCS side, and prints marker logs periodically.
+Use this for the current vision development stage. It receives the raw MJPEG
+camera stream and vision telemetry at the same time, draws marker and line
+overlays on the GCS side, and opens a separate vision log window when the
+platform supports it.
 
 ```bash
 ./build/uav_gcs_vision_debug --config config
@@ -104,12 +105,30 @@ On Windows with Ninja:
 
 Start this before running `uav-onboard/build/vision_debug_node` on the
 Raspberry Pi. The onboard stream remains raw camera JPEG; marker boxes, labels,
-and direction arrows are drawn only by GCS.
+direction arrows, magenta line contours, and green line tracking points are
+drawn only by GCS.
+
+Expected live overlay behavior:
+
+- ArUco markers: marker box, corner points, center point, direction arrow, label.
+- Line tracing: magenta contour/border and green tracking point.
+- If both detectors are enabled, both overlays are shown in the same video
+  window using the same frame sequence synchronization.
+- The separate vision log window shows packet stats, marker state, line state,
+  and detector latency. If the log window backend is unavailable, the same text
+  is printed to the terminal.
 
 If the Pi discovers the GCS IP but this app still shows no telemetry packets,
 check Windows Defender Firewall. `uav_gcs_vision_debug.exe` needs inbound UDP
 allow rules for the current network profile, the same as `uav_gcs.exe` and
 `uav_gcs_video.exe`.
+
+Useful test options:
+
+```powershell
+.\build\uav_gcs_vision_debug.exe --config config
+.\build\uav_gcs_vision_debug.exe --config config --marker-log-ms 1000
+```
 
 ## Local Mock Test
 
@@ -131,6 +150,19 @@ On Windows PowerShell with the default Visual Studio CMake generator:
 .\build\Release\uav_gcs.exe --config config --count 5
 .\build\Release\mock_onboard.exe --gcs-ip 127.0.0.1 --count 5
 ```
+
+## Tests
+
+Configure with tests enabled:
+
+```powershell
+cmake -S . -B build-tests -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
+cmake --build build-tests
+ctest --test-dir build-tests --output-on-failure
+```
+
+Current focused tests cover telemetry parsing for `vision.line` and GCS line
+overlay primitive generation.
 
 ## Pi Bring-Up Order
 
