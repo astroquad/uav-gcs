@@ -13,16 +13,20 @@ std::optional<JpegFrame> JpegFrameReassembler::acceptPacket(
     }
 
     if (current_frame_id_ == 0 || header.frame_id > current_frame_id_) {
+        noteIncompleteFrame();
         current_frame_id_ = header.frame_id;
         current_timestamp_ms_ = header.timestamp_ms;
         expected_chunks_ = header.chunk_count;
         received_chunks_ = 0;
         chunks_.assign(expected_chunks_, {});
     } else if (header.frame_id < current_frame_id_) {
+        ++stats_.old_packets;
         return std::nullopt;
     }
 
     if (header.chunk_count != expected_chunks_) {
+        ++stats_.chunk_mismatch_resets;
+        noteIncompleteFrame();
         reset();
         return std::nullopt;
     }
@@ -43,6 +47,9 @@ std::optional<JpegFrame> JpegFrameReassembler::acceptPacket(
     for (const auto& part : chunks_) {
         frame.data.insert(frame.data.end(), part.begin(), part.end());
     }
+    ++stats_.completed_frames;
+    stats_.last_chunk_count = expected_chunks_;
+    stats_.last_frame_bytes = frame.data.size();
     reset();
     return frame;
 }
@@ -54,6 +61,18 @@ void JpegFrameReassembler::reset()
     expected_chunks_ = 0;
     received_chunks_ = 0;
     chunks_.clear();
+}
+
+JpegReassemblerStats JpegFrameReassembler::stats() const
+{
+    return stats_;
+}
+
+void JpegFrameReassembler::noteIncompleteFrame()
+{
+    if (current_frame_id_ != 0 && received_chunks_ > 0 && received_chunks_ < expected_chunks_) {
+        ++stats_.incomplete_frames;
+    }
 }
 
 } // namespace gcs::video

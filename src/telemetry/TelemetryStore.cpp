@@ -31,10 +31,15 @@ void TelemetryStore::observe(const protocol::TelemetryMessage& message)
     frame.telemetry_build_ms = message.debug.telemetry_build_ms;
     frame.telemetry_send_ms = message.debug.telemetry_send_ms;
     frame.video_submit_ms = message.debug.video_submit_ms;
+    frame.video_send_ms = message.debug.video_send_ms;
+    frame.cpu_temp_c = message.debug.cpu_temp_c;
     frame.telemetry_bytes = message.debug.telemetry_bytes;
     frame.video_jpeg_bytes = message.debug.video_jpeg_bytes;
     frame.video_sent_frames = message.debug.video_sent_frames;
     frame.video_dropped_frames = message.debug.video_dropped_frames;
+    frame.video_skipped_frames = message.debug.video_skipped_frames;
+    frame.video_chunks_sent = message.debug.video_chunks_sent;
+    frame.video_chunk_count = message.debug.video_chunk_count;
     frame.line_mask_count = message.debug.line_mask_count;
     frame.line_contours_found = message.debug.line_contours_found;
     frame.line_candidates_evaluated = message.debug.line_candidates_evaluated;

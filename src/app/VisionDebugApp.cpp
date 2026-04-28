@@ -14,8 +14,11 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <iomanip>
 #include <iostream>
 #include <mutex>
+#include <optional>
+#include <sstream>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -104,14 +107,123 @@ private:
     std::string last_error_;
 };
 
+class VideoReceiveThread {
+public:
+    bool start(std::uint16_t port, int timeout_ms)
+    {
+        if (!receiver_.open(port)) {
+            last_error_ = receiver_.lastError();
+            return false;
+        }
+
+        running_ = true;
+        worker_ = std::thread([this, timeout_ms]() {
+            const int poll_timeout_ms = std::clamp(timeout_ms, 1, 50);
+            while (running_) {
+                auto frame = receiver_.receiveFrame(poll_timeout_ms);
+                {
+                    std::lock_guard<std::mutex> lock(stats_mutex_);
+                    stats_ = receiver_.stats();
+                }
+                if (frame) {
+                    std::lock_guard<std::mutex> lock(frame_mutex_);
+                    if (latest_frame_) {
+                        ++overwritten_frames_;
+                    }
+                    latest_frame_ = std::move(frame);
+                    continue;
+                }
+
+                if (receiver_.lastError() != "timeout") {
+                    std::lock_guard<std::mutex> lock(error_mutex_);
+                    last_error_ = receiver_.lastError();
+                }
+            }
+        });
+        return true;
+    }
+
+    void stop()
+    {
+        running_ = false;
+        if (worker_.joinable()) {
+            worker_.join();
+        }
+        receiver_.close();
+    }
+
+    std::optional<video::JpegFrame> takeLatestFrame()
+    {
+        std::lock_guard<std::mutex> lock(frame_mutex_);
+        if (!latest_frame_) {
+            return std::nullopt;
+        }
+        auto output = std::move(latest_frame_);
+        latest_frame_.reset();
+        return output;
+    }
+
+    video::UdpMjpegReceiverStats stats() const
+    {
+        std::lock_guard<std::mutex> lock(stats_mutex_);
+        return stats_;
+    }
+
+    std::uint64_t overwrittenFrames() const
+    {
+        std::lock_guard<std::mutex> lock(frame_mutex_);
+        return overwritten_frames_;
+    }
+
+    std::string takeLastError()
+    {
+        std::lock_guard<std::mutex> lock(error_mutex_);
+        std::string output = std::move(last_error_);
+        last_error_.clear();
+        return output;
+    }
+
+private:
+    video::UdpMjpegReceiver receiver_;
+    std::atomic<bool> running_ {false};
+    std::thread worker_;
+    mutable std::mutex frame_mutex_;
+    std::optional<video::JpegFrame> latest_frame_;
+    std::uint64_t overwritten_frames_ = 0;
+    mutable std::mutex stats_mutex_;
+    video::UdpMjpegReceiverStats stats_;
+    mutable std::mutex error_mutex_;
+    std::string last_error_;
+};
+
+std::string formatVideoStatsLine(
+    const video::UdpMjpegReceiverStats& stats,
+    std::uint64_t overwritten_frames,
+    double display_fps)
+{
+    std::ostringstream stream;
+    stream << std::fixed << std::setprecision(1)
+           << "[video-rx] display_fps=" << display_fps
+           << " packets=" << stats.packets_received
+           << " completed=" << stats.completed_frames
+           << " incomplete=" << stats.incomplete_frames
+           << " malformed=" << stats.malformed_packets
+           << " old_packets=" << stats.old_packets
+           << " mismatch_resets=" << stats.chunk_mismatch_resets
+           << " latest_overwritten=" << overwritten_frames
+           << " last_chunks=" << stats.last_chunk_count
+           << " last_bytes=" << stats.last_frame_bytes << "\n";
+    return stream.str();
+}
+
 } // namespace
 
 int VisionDebugApp::run(const VisionDebugOptions& options)
 {
-    video::UdpMjpegReceiver video_receiver;
-    if (!video_receiver.open(options.video_port)) {
+    VideoReceiveThread video_thread;
+    if (!video_thread.start(options.video_port, options.video_timeout_ms)) {
         std::cerr << "failed to open UDP video receiver on port "
-                  << options.video_port << ": " << video_receiver.lastError() << "\n";
+                  << options.video_port << ": " << video_thread.takeLastError() << "\n";
         return 1;
     }
 
@@ -123,6 +235,7 @@ int VisionDebugApp::run(const VisionDebugOptions& options)
             telemetry_store)) {
         std::cerr << "failed to open UDP telemetry receiver on port "
                   << options.telemetry_port << ": " << telemetry_thread.takeLastError() << "\n";
+        video_thread.stop();
         return 1;
     }
 
@@ -142,11 +255,13 @@ int VisionDebugApp::run(const VisionDebugOptions& options)
 
     auto last_frame_time = std::chrono::steady_clock::now();
     auto last_log_time = std::chrono::steady_clock::now();
+    auto fps_window_time = std::chrono::steady_clock::now();
+    int displayed_frames_in_window = 0;
+    double display_fps = 0.0;
     bool received_any_frame = false;
 
     while (true) {
-        const int poll_timeout_ms = std::clamp(options.video_timeout_ms, 1, 50);
-        const auto frame = video_receiver.receiveFrame(poll_timeout_ms);
+        const auto frame = video_thread.takeLatestFrame();
         if (frame) {
             last_frame_time = std::chrono::steady_clock::now();
             received_any_frame = true;
@@ -164,16 +279,21 @@ int VisionDebugApp::run(const VisionDebugOptions& options)
 
             if (!window.showFrame(*frame, overlays)) {
                 std::cerr << "video display warning: failed to decode JPEG frame\n";
+            } else {
+                ++displayed_frames_in_window;
             }
-        } else if (video_receiver.lastError() == "timeout") {
+        } else {
             const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - last_frame_time);
             if (!received_any_frame && elapsed.count() >= options.video_timeout_ms) {
                 window.showStatus("waiting for video stream...");
                 last_frame_time = std::chrono::steady_clock::now();
             }
-        } else {
-            std::cerr << "video receive warning: " << video_receiver.lastError() << "\n";
+        }
+
+        const std::string video_error = video_thread.takeLastError();
+        if (!video_error.empty()) {
+            std::cerr << "video receive warning: " << video_error << "\n";
         }
 
         const std::string telemetry_error = telemetry_thread.takeLastError();
@@ -182,22 +302,39 @@ int VisionDebugApp::run(const VisionDebugOptions& options)
         }
 
         const auto now = std::chrono::steady_clock::now();
+        const auto fps_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - fps_window_time);
+        if (fps_elapsed.count() >= 1000) {
+            display_fps = displayed_frames_in_window * 1000.0 /
+                std::max(1, static_cast<int>(fps_elapsed.count()));
+            displayed_frames_in_window = 0;
+            fps_window_time = now;
+        }
+
         if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_log_time).count()
             >= options.marker_log_interval_ms) {
             if (const auto latest = telemetry_store.latest()) {
-                const auto text = telemetry::formatVisionLog(
+                auto text = telemetry::formatVisionLog(
                     *latest,
                     telemetry_thread.stats(),
                     unixTimestampMs());
+                text += formatVideoStatsLine(
+                    video_thread.stats(),
+                    video_thread.overwrittenFrames(),
+                    display_fps);
                 if (!log_window.update(text)) {
                     std::cout << text;
                 }
             } else {
                 const auto stats = telemetry_thread.stats();
-                const std::string text =
+                std::string text =
                     "[vision] no telemetry packets yet packets=" +
                     std::to_string(stats.received_packets) +
                     " dropped=" + std::to_string(stats.dropped_packets) + "\n";
+                text += formatVideoStatsLine(
+                    video_thread.stats(),
+                    video_thread.overwrittenFrames(),
+                    display_fps);
                 if (!log_window.update(text)) {
                     std::cout << text;
                 }
@@ -211,6 +348,7 @@ int VisionDebugApp::run(const VisionDebugOptions& options)
         }
     }
 
+    video_thread.stop();
     telemetry_thread.stop();
     return 0;
 }

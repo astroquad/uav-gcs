@@ -235,6 +235,10 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
             valueOr<double>(*debug, "telemetry_send_ms", message.debug.telemetry_send_ms);
         message.debug.video_submit_ms =
             valueOr<double>(*debug, "video_submit_ms", message.debug.video_submit_ms);
+        message.debug.video_send_ms =
+            valueOr<double>(*debug, "video_send_ms", message.debug.video_send_ms);
+        message.debug.cpu_temp_c =
+            valueOr<double>(*debug, "cpu_temp_c", message.debug.cpu_temp_c);
         message.debug.telemetry_bytes =
             valueOr<std::uint64_t>(*debug, "telemetry_bytes", message.debug.telemetry_bytes);
         message.debug.video_jpeg_bytes =
@@ -243,6 +247,12 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
             valueOr<std::uint64_t>(*debug, "video_sent_frames", message.debug.video_sent_frames);
         message.debug.video_dropped_frames =
             valueOr<std::uint64_t>(*debug, "video_dropped_frames", message.debug.video_dropped_frames);
+        message.debug.video_skipped_frames =
+            valueOr<std::uint64_t>(*debug, "video_skipped_frames", message.debug.video_skipped_frames);
+        message.debug.video_chunks_sent =
+            valueOr<std::uint64_t>(*debug, "video_chunks_sent", message.debug.video_chunks_sent);
+        message.debug.video_chunk_count =
+            valueOr<int>(*debug, "video_chunk_count", message.debug.video_chunk_count);
         message.debug.line_mask_count =
             valueOr<int>(*debug, "line_mask_count", message.debug.line_mask_count);
         message.debug.line_contours_found =

@@ -54,10 +54,15 @@ int main()
         "telemetry_build_ms": 0.2,
         "telemetry_send_ms": 0.1,
         "video_submit_ms": 0.1,
+        "video_send_ms": 4.5,
+        "cpu_temp_c": 62.5,
         "telemetry_bytes": 512,
         "video_jpeg_bytes": 12345,
         "video_sent_frames": 98,
         "video_dropped_frames": 1,
+        "video_skipped_frames": 2,
+        "video_chunks_sent": 120,
+        "video_chunk_count": 12,
         "line_mask_count": 1,
         "line_contours_found": 3,
         "line_candidates_evaluated": 2,
@@ -77,6 +82,11 @@ int main()
     assert(parsed->vision.line.raw_center_offset_px == -20.0);
     assert(parsed->vision.line.contour_px.size() == 2);
     assert(parsed->debug.line_latency_ms == 2.0);
+    assert(parsed->debug.video_send_ms == 4.5);
+    assert(parsed->debug.cpu_temp_c == 62.5);
+    assert(parsed->debug.video_skipped_frames == 2);
+    assert(parsed->debug.video_chunks_sent == 120);
+    assert(parsed->debug.video_chunk_count == 12);
     assert(parsed->debug.line_contours_found == 3);
     assert(parsed->debug.video_jpeg_bytes == 12345);
     return 0;

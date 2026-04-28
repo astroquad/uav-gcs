@@ -5,6 +5,13 @@ target_include_directories(test_telemetry_line_parse PRIVATE ../src)
 target_link_libraries(test_telemetry_line_parse PRIVATE gcs_core)
 add_test(NAME telemetry_line_parse COMMAND test_telemetry_line_parse)
 
+add_executable(test_video_reassembler
+    test_video_reassembler.cpp
+    ../src/video/JpegFrameReassembler.cpp
+)
+target_include_directories(test_video_reassembler PRIVATE ../src)
+add_test(NAME video_reassembler COMMAND test_video_reassembler)
+
 if(TARGET gcs_video)
     add_executable(test_line_overlay
         test_line_overlay.cpp

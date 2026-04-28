@@ -91,7 +91,9 @@ the laptop IP and then sends video by unicast.
 Use this for the current vision development stage. It receives the raw MJPEG
 camera stream and vision telemetry at the same time, draws marker and line
 overlays on the GCS side, and opens a separate vision log window when the
-platform supports it.
+platform supports it. The vision receiver drains UDP video packets on a
+background receive thread and the UI displays only the latest complete JPEG
+frame, so OpenCV/Win32 drawing does not block socket reads.
 
 ```bash
 ./build/uav_gcs_vision_debug --config config
@@ -118,8 +120,10 @@ Expected live overlay behavior:
   window using the same frame sequence synchronization.
 - The separate vision log window shows packet stats, marker state, line state,
   detector latency, onboard read/decode/JSON/send/video timing, line contour
-  workload counters, video queue drops, and raw-vs-filtered line state. If the
-  log window backend is unavailable, the same text is printed to the terminal.
+  workload counters, video queue drops/skips, video chunk counts, GCS
+  completed/incomplete frame counts, displayed FPS, optional Pi CPU
+  temperature, and raw-vs-filtered line state. If the log window backend is
+  unavailable, the same text is printed to the terminal.
 
 If the Pi discovers the GCS IP but this app still shows no telemetry packets,
 check Windows Defender Firewall. `uav_gcs_vision_debug.exe` needs inbound UDP
@@ -165,7 +169,8 @@ ctest --test-dir build-tests --output-on-failure
 ```
 
 Current focused tests cover telemetry parsing for `vision.line` and GCS line
-overlay primitive generation.
+overlay primitive generation. Video reassembly stats are also covered so frame
+drop diagnostics do not regress silently.
 
 ## Pi Bring-Up Order
 

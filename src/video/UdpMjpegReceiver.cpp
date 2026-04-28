@@ -150,9 +150,11 @@ std::optional<JpegFrame> UdpMjpegReceiver::receiveFrame(int timeout_ms)
             last_error_ = socketErrorString();
             return std::nullopt;
         }
+        ++packets_received_;
 
         VideoPacketHeader header;
         if (!parseHeader(packet.data(), static_cast<std::size_t>(received), header)) {
+            ++malformed_packets_;
             last_error_ = "dropped malformed video packet";
             continue;
         }
@@ -179,6 +181,21 @@ void UdpMjpegReceiver::close()
 std::string UdpMjpegReceiver::lastError() const
 {
     return last_error_;
+}
+
+UdpMjpegReceiverStats UdpMjpegReceiver::stats() const
+{
+    const auto reassembler_stats = reassembler_.stats();
+    UdpMjpegReceiverStats output;
+    output.packets_received = packets_received_;
+    output.malformed_packets = malformed_packets_;
+    output.completed_frames = reassembler_stats.completed_frames;
+    output.incomplete_frames = reassembler_stats.incomplete_frames;
+    output.old_packets = reassembler_stats.old_packets;
+    output.chunk_mismatch_resets = reassembler_stats.chunk_mismatch_resets;
+    output.last_chunk_count = reassembler_stats.last_chunk_count;
+    output.last_frame_bytes = reassembler_stats.last_frame_bytes;
+    return output;
 }
 
 } // namespace gcs::video

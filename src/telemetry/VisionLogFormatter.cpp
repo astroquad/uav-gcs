@@ -23,15 +23,20 @@ std::string formatVisionLog(
            << " line=" << frame.line_latency_ms << "ms"
            << " json=" << frame.telemetry_build_ms << "ms"
            << " tsend=" << frame.telemetry_send_ms << "ms"
-           << " vsubmit=" << frame.video_submit_ms << "ms\n"
+           << " vsubmit=" << frame.video_submit_ms << "ms"
+           << " vsend=" << frame.video_send_ms << "ms"
+           << " cpu_temp=" << frame.cpu_temp_c << "C\n"
            << "[packets] received=" << stats.received_packets
            << " dropped=" << stats.dropped_packets
            << " dup=" << stats.duplicate_packets
            << " ooo=" << stats.out_of_order_packets
            << " telemetry_bytes=" << frame.telemetry_bytes
            << " jpeg_bytes=" << frame.video_jpeg_bytes
+           << " chunks_last=" << frame.video_chunk_count
+           << " chunks_total=" << frame.video_chunks_sent
            << " video_sent=" << frame.video_sent_frames
-           << " video_dropped=" << frame.video_dropped_frames << "\n";
+           << " video_dropped=" << frame.video_dropped_frames
+           << " video_skipped=" << frame.video_skipped_frames << "\n";
 
     stream << "[line] detected=" << (frame.line.detected ? "yes" : "no");
     if (frame.line.detected) {
