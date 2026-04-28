@@ -182,13 +182,20 @@ drop diagnostics do not regress silently.
 ## Pi Bring-Up Order
 
 1. Build and start this GCS receiver on the laptop.
-2. Build and start `uav_gcs_video` on the laptop if camera video is needed.
-3. Run `uav-onboard/build/video_streamer --source rpicam --config config` on the Pi.
-   It should print `discovered GCS video receiver at <ip>:5600`.
-4. Run `uav-onboard/build/uav_onboard --config config --count 10` on the Pi.
-5. Confirm this GCS prints `TELEMETRY` packets with increasing `seq` values.
+2. For metadata-only onboard runs, start the Pi with no `--video` flag:
+   `./build/vision_debug_node --config config --line-only --line-mode light_on_dark`.
+3. If the GCS camera window should show raw camera video and overlays, add
+   `--video` on the Pi:
+   `./build/vision_debug_node --config config --line-only --line-mode light_on_dark --video`.
+4. Confirm this GCS prints `TELEMETRY` packets with increasing `seq` values.
 
-The onboard default sends telemetry/video to IPv4 broadcast
-`255.255.255.255`, so the laptop IP usually does not need to be edited. If the
-network blocks discovery or broadcast, override the video destination with
+The onboard default sends telemetry to IPv4 broadcast `255.255.255.255`. When
+debug video is enabled with `--video`, the video destination is also discovered
+or sent by broadcast, so the laptop IP usually does not need to be edited. If
+the network blocks discovery or broadcast, override the video destination with
 `--gcs-ip <laptop-ip>`.
+
+If the camera window stays on `waiting for video stream...` while the vision log
+continues to update, inspect the `[video]` counters in the log. `video_sent=0`,
+`chunks_last=0`, and `last_bytes=0` mean the Pi is intentionally running in
+telemetry-only mode; restart the Pi command with `--video`.
