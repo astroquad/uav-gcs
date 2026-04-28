@@ -25,7 +25,28 @@ std::string formatVisionLog(
            << " tsend=" << frame.telemetry_send_ms << "ms"
            << " vsubmit=" << frame.video_submit_ms << "ms"
            << " vsend=" << frame.video_send_ms << "ms"
+           << " capture_fps=" << frame.capture_fps
+           << " processing_fps=" << frame.processing_fps
            << " cpu_temp=" << frame.cpu_temp_c << "C\n"
+           << "[camera] sensor=" << (frame.camera.sensor_model.empty() ? "unknown" : frame.camera.sensor_model)
+           << " index=" << frame.camera.camera_index
+           << " size=" << frame.width << "x" << frame.height
+           << " configured_fps=" << frame.camera.configured_fps
+           << " measured_capture_fps=" << frame.camera.measured_capture_fps
+           << " af=" << (frame.camera.autofocus_mode.empty() ? "unknown" : frame.camera.autofocus_mode)
+           << " lens=" << frame.camera.lens_position
+           << " exposure=" << (frame.camera.exposure_mode.empty() ? "unknown" : frame.camera.exposure_mode)
+           << " shutter_us=" << frame.camera.shutter_us
+           << " gain=" << frame.camera.gain
+           << " awb=" << (frame.camera.awb.empty() ? "unknown" : frame.camera.awb) << "\n"
+           << "[system] board=" << (frame.system.board_model.empty() ? "unknown" : frame.system.board_model)
+           << " os=" << (frame.system.os_release.empty() ? "unknown" : frame.system.os_release)
+           << " uptime_s=" << frame.system.uptime_s
+           << " load1=" << frame.system.cpu_load_1m
+           << " mem_avail_kb=" << frame.system.mem_available_kb
+           << " throttled=" << (frame.system.throttled_raw.empty() ? "unknown" : frame.system.throttled_raw)
+           << " wifi_signal=" << frame.system.wifi_signal_dbm << "dBm"
+           << " wifi_tx=" << frame.system.wifi_tx_bitrate_mbps << "Mbps\n"
            << "[packets] received=" << stats.received_packets
            << " dropped=" << stats.dropped_packets
            << " dup=" << stats.duplicate_packets
@@ -34,9 +55,12 @@ std::string formatVisionLog(
            << " jpeg_bytes=" << frame.video_jpeg_bytes
            << " chunks_last=" << frame.video_chunk_count
            << " chunks_total=" << frame.video_chunks_sent
+           << " chunk_pacing_us=" << frame.video_chunk_pacing_us
+           << " video_target_fps=" << frame.debug_video_send_fps
            << " video_sent=" << frame.video_sent_frames
            << " video_dropped=" << frame.video_dropped_frames
-           << " video_skipped=" << frame.video_skipped_frames << "\n";
+           << " video_skipped=" << frame.video_skipped_frames
+           << " video_send_failures=" << frame.video_send_failures << "\n";
 
     stream << "[line] detected=" << (frame.line.detected ? "yes" : "no");
     if (frame.line.detected) {

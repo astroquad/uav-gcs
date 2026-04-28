@@ -97,12 +97,49 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
         message.mission_state = valueOr<std::string>(*mission, "state", message.mission_state);
     }
 
+    if (const auto system = json.find("system"); system != json.end()) {
+        message.system.board_model =
+            valueOr<std::string>(*system, "board_model", message.system.board_model);
+        message.system.os_release =
+            valueOr<std::string>(*system, "os_release", message.system.os_release);
+        message.system.uptime_s =
+            valueOr<double>(*system, "uptime_s", message.system.uptime_s);
+        message.system.cpu_temp_c =
+            valueOr<double>(*system, "cpu_temp_c", message.system.cpu_temp_c);
+        message.system.throttled_raw =
+            valueOr<std::string>(*system, "throttled_raw", message.system.throttled_raw);
+        message.system.cpu_load_1m =
+            valueOr<double>(*system, "cpu_load_1m", message.system.cpu_load_1m);
+        message.system.mem_available_kb =
+            valueOr<std::uint64_t>(*system, "mem_available_kb", message.system.mem_available_kb);
+        message.system.wifi_signal_dbm =
+            valueOr<double>(*system, "wifi_signal_dbm", message.system.wifi_signal_dbm);
+        message.system.wifi_tx_bitrate_mbps =
+            valueOr<double>(*system, "wifi_tx_bitrate_mbps", message.system.wifi_tx_bitrate_mbps);
+    }
+
     if (const auto camera = json.find("camera"); camera != json.end()) {
         message.camera.status = valueOr<std::string>(*camera, "status", message.camera.status);
+        message.camera.sensor_model =
+            valueOr<std::string>(*camera, "sensor_model", message.camera.sensor_model);
+        message.camera.camera_index = valueOr<int>(*camera, "camera_index", message.camera.camera_index);
         message.camera.width = valueOr<int>(*camera, "width", message.camera.width);
         message.camera.height = valueOr<int>(*camera, "height", message.camera.height);
         message.camera.fps = valueOr<double>(*camera, "fps", message.camera.fps);
+        message.camera.configured_fps =
+            valueOr<double>(*camera, "configured_fps", message.camera.configured_fps);
+        message.camera.measured_capture_fps =
+            valueOr<double>(*camera, "measured_capture_fps", message.camera.measured_capture_fps);
         message.camera.frame_seq = valueOr<std::uint32_t>(*camera, "frame_seq", message.camera.frame_seq);
+        message.camera.autofocus_mode =
+            valueOr<std::string>(*camera, "autofocus_mode", message.camera.autofocus_mode);
+        message.camera.lens_position =
+            valueOr<double>(*camera, "lens_position", message.camera.lens_position);
+        message.camera.exposure_mode =
+            valueOr<std::string>(*camera, "exposure_mode", message.camera.exposure_mode);
+        message.camera.shutter_us = valueOr<int>(*camera, "shutter_us", message.camera.shutter_us);
+        message.camera.gain = valueOr<double>(*camera, "gain", message.camera.gain);
+        message.camera.awb = valueOr<std::string>(*camera, "awb", message.camera.awb);
     }
 
     // Backward-compatible parsing for earlier bring-up packets.
@@ -237,6 +274,14 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
             valueOr<double>(*debug, "video_submit_ms", message.debug.video_submit_ms);
         message.debug.video_send_ms =
             valueOr<double>(*debug, "video_send_ms", message.debug.video_send_ms);
+        message.debug.capture_fps =
+            valueOr<double>(*debug, "capture_fps", message.debug.capture_fps);
+        message.debug.processing_fps =
+            valueOr<double>(*debug, "processing_fps", message.debug.processing_fps);
+        message.debug.debug_video_send_fps =
+            valueOr<double>(*debug, "debug_video_send_fps", message.debug.debug_video_send_fps);
+        message.debug.video_chunk_pacing_us =
+            valueOr<int>(*debug, "video_chunk_pacing_us", message.debug.video_chunk_pacing_us);
         message.debug.cpu_temp_c =
             valueOr<double>(*debug, "cpu_temp_c", message.debug.cpu_temp_c);
         message.debug.telemetry_bytes =
@@ -251,6 +296,8 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
             valueOr<std::uint64_t>(*debug, "video_skipped_frames", message.debug.video_skipped_frames);
         message.debug.video_chunks_sent =
             valueOr<std::uint64_t>(*debug, "video_chunks_sent", message.debug.video_chunks_sent);
+        message.debug.video_send_failures =
+            valueOr<std::uint64_t>(*debug, "video_send_failures", message.debug.video_send_failures);
         message.debug.video_chunk_count =
             valueOr<int>(*debug, "video_chunk_count", message.debug.video_chunk_count);
         message.debug.line_mask_count =

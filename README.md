@@ -120,10 +120,17 @@ Expected live overlay behavior:
   window using the same frame sequence synchronization.
 - The separate vision log window shows packet stats, marker state, line state,
   detector latency, onboard read/decode/JSON/send/video timing, line contour
-  workload counters, video queue drops/skips, video chunk counts, GCS
-  completed/incomplete frame counts, displayed FPS, optional Pi CPU
-  temperature, and raw-vs-filtered line state. If the log window backend is
-  unavailable, the same text is printed to the terminal.
+  workload counters, video queue drops/skips/failures, video chunk counts, GCS
+  completed/incomplete frame counts, displayed FPS, Pi board/OS/load/memory/
+  throttling/Wi-Fi state, IMX519 camera focus/exposure settings, capture/
+  processing FPS, optional Pi CPU temperature, and raw-vs-filtered line state.
+  If the log window backend is unavailable, the same text is printed to the
+  terminal.
+
+Raspberry Pi 4 + IMX519-78 can produce larger MJPEG frames than the previous
+Zero-class camera setup. GCS still treats video as best-effort debug data:
+complete/incomplete frame counts and displayed FPS are the useful health
+signals, while actual mission decisions must come from onboard telemetry.
 
 If the Pi discovers the GCS IP but this app still shows no telemetry packets,
 check Windows Defender Firewall. `uav_gcs_vision_debug.exe` needs inbound UDP

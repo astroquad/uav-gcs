@@ -14,6 +14,8 @@ namespace gcs::telemetry {
 struct VisionFrame {
     std::uint32_t frame_seq = 0;
     std::int64_t timestamp_ms = 0;
+    protocol::SystemTelemetry system;
+    protocol::CameraTelemetry camera;
     int width = 0;
     int height = 0;
     double processing_latency_ms = 0.0;
@@ -25,6 +27,10 @@ struct VisionFrame {
     double telemetry_send_ms = 0.0;
     double video_submit_ms = 0.0;
     double video_send_ms = 0.0;
+    double capture_fps = 0.0;
+    double processing_fps = 0.0;
+    double debug_video_send_fps = 0.0;
+    int video_chunk_pacing_us = 0;
     double cpu_temp_c = 0.0;
     std::uint64_t telemetry_bytes = 0;
     std::uint64_t video_jpeg_bytes = 0;
@@ -32,6 +38,7 @@ struct VisionFrame {
     std::uint64_t video_dropped_frames = 0;
     std::uint64_t video_skipped_frames = 0;
     std::uint64_t video_chunks_sent = 0;
+    std::uint64_t video_send_failures = 0;
     int video_chunk_count = 0;
     int line_mask_count = 0;
     int line_contours_found = 0;

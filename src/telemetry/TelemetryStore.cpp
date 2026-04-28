@@ -21,6 +21,8 @@ void TelemetryStore::observe(const protocol::TelemetryMessage& message)
     VisionFrame frame;
     frame.frame_seq = message.camera.frame_seq;
     frame.timestamp_ms = message.timestamp_ms;
+    frame.system = message.system;
+    frame.camera = message.camera;
     frame.width = message.camera.width;
     frame.height = message.camera.height;
     frame.processing_latency_ms = message.debug.processing_latency_ms;
@@ -32,6 +34,10 @@ void TelemetryStore::observe(const protocol::TelemetryMessage& message)
     frame.telemetry_send_ms = message.debug.telemetry_send_ms;
     frame.video_submit_ms = message.debug.video_submit_ms;
     frame.video_send_ms = message.debug.video_send_ms;
+    frame.capture_fps = message.debug.capture_fps;
+    frame.processing_fps = message.debug.processing_fps;
+    frame.debug_video_send_fps = message.debug.debug_video_send_fps;
+    frame.video_chunk_pacing_us = message.debug.video_chunk_pacing_us;
     frame.cpu_temp_c = message.debug.cpu_temp_c;
     frame.telemetry_bytes = message.debug.telemetry_bytes;
     frame.video_jpeg_bytes = message.debug.video_jpeg_bytes;
@@ -39,6 +45,7 @@ void TelemetryStore::observe(const protocol::TelemetryMessage& message)
     frame.video_dropped_frames = message.debug.video_dropped_frames;
     frame.video_skipped_frames = message.debug.video_skipped_frames;
     frame.video_chunks_sent = message.debug.video_chunks_sent;
+    frame.video_send_failures = message.debug.video_send_failures;
     frame.video_chunk_count = message.debug.video_chunk_count;
     frame.line_mask_count = message.debug.line_mask_count;
     frame.line_contours_found = message.debug.line_contours_found;
