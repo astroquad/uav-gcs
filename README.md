@@ -199,3 +199,7 @@ If the camera window stays on `waiting for video stream...` while the vision log
 continues to update, inspect the `[video]` counters in the log. `video_sent=0`,
 `chunks_last=0`, and `last_bytes=0` mean the Pi is intentionally running in
 telemetry-only mode; restart the Pi command with `--video`.
+
+The camera overlay text shows local frame `age`, not wall-clock end-to-end
+latency. Pi and Windows clocks are not assumed to be synchronized, so raw
+capture timestamps are not subtracted from the laptop clock for the display.

@@ -1,5 +1,6 @@
 #include "telemetry/MarkerLogFormatter.hpp"
 
+#include <algorithm>
 #include <iomanip>
 #include <sstream>
 
@@ -10,7 +11,9 @@ std::string formatMarkerLog(
     const protocol::TelemetryStats& stats,
     std::int64_t now_ms)
 {
-    const auto age_ms = now_ms - frame.timestamp_ms;
+    const auto age_ms = frame.received_steady_ms > 0
+        ? std::max<std::int64_t>(0, now_ms - frame.received_steady_ms)
+        : 0;
 
     std::ostringstream stream;
     stream << std::fixed << std::setprecision(1)

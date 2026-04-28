@@ -1,6 +1,19 @@
 #include "video/JpegFrameReassembler.hpp"
 
+#include <chrono>
+
 namespace gcs::video {
+namespace {
+
+std::uint64_t steadyTimestampMs()
+{
+    const auto now = std::chrono::steady_clock::now();
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        now.time_since_epoch());
+    return static_cast<std::uint64_t>(ms.count());
+}
+
+} // namespace
 
 std::optional<JpegFrame> JpegFrameReassembler::acceptPacket(
     const VideoPacketHeader& header,
@@ -44,6 +57,7 @@ std::optional<JpegFrame> JpegFrameReassembler::acceptPacket(
     JpegFrame frame;
     frame.frame_id = current_frame_id_;
     frame.timestamp_ms = current_timestamp_ms_;
+    frame.received_steady_ms = steadyTimestampMs();
     for (const auto& part : chunks_) {
         frame.data.insert(frame.data.end(), part.begin(), part.end());
     }

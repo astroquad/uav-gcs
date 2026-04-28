@@ -11,6 +11,7 @@ namespace gcs::video {
 struct JpegFrame {
     std::uint32_t frame_id = 0;
     std::uint64_t timestamp_ms = 0;
+    std::uint64_t received_steady_ms = 0;
     std::vector<std::uint8_t> data;
 };
 

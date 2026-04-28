@@ -4,6 +4,7 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -13,12 +14,21 @@
 namespace gcs::ui {
 namespace {
 
-std::int64_t unixTimestampMs()
+std::int64_t steadyTimestampMs()
 {
-    const auto now = std::chrono::system_clock::now();
+    const auto now = std::chrono::steady_clock::now();
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         now.time_since_epoch());
     return ms.count();
+}
+
+std::int64_t frameAgeMs(const video::JpegFrame& frame)
+{
+    if (frame.received_steady_ms == 0) {
+        return 0;
+    }
+    const auto age = steadyTimestampMs() - static_cast<std::int64_t>(frame.received_steady_ms);
+    return std::max<std::int64_t>(0, age);
 }
 
 cv::Scalar toScalar(const overlay::Color& color)
@@ -61,10 +71,10 @@ bool VideoWindow::showFrame(
         return false;
     }
 
-    const auto latency_ms = unixTimestampMs() - static_cast<std::int64_t>(frame.timestamp_ms);
+    const auto age_ms = frameAgeMs(frame);
     cv::putText(
         image,
-        "frame " + std::to_string(frame.frame_id) + " latency " + std::to_string(latency_ms) + " ms",
+        "frame " + std::to_string(frame.frame_id) + " age " + std::to_string(age_ms) + " ms",
         cv::Point(12, 24),
         cv::FONT_HERSHEY_SIMPLEX,
         0.55,
