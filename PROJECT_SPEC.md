@@ -3,508 +3,499 @@
 > 제24회 한국로봇항공기경연대회 중급부문 멀티콥터형 드론 실내 조난자 탐색 GCS 소프트웨어 기준 문서  
 > **이 문서는 팀원과 코딩 에이전트가 공통으로 참조하는 Single Source of Truth입니다.**
 
+최종 수정: 2026-04-29
+
 ---
 
 ## 1. 프로젝트 목적
 
-노트북에서 실행되는 C++ 기반 지상 관제 프로그램(GCS)을 개발한다.  
-GCS는 드론의 자율 미션 상태를 실시간으로 시각화하고, 운용자가 고수준 명령을 보낼 수 있는 인터페이스를 제공한다.  
-드론의 자율주행 판단은 온보드 프로그램이 수행하며, GCS는 **모니터링과 비상 대응**에 집중한다.
+노트북에서 실행되는 C++ 기반 지상 관제 프로그램(GCS)을 개발한다. GCS는 드론의 자율 미션 상태를 실시간으로 시각화하고, 운용자가 고수준 명령을 보낼 수 있는 인터페이스를 제공한다.
+
+현재 레포는 최종 GCS UI 전체 중 **telemetry receiver, raw debug video receiver, GCS-side ArUco/line overlay, vision log window** 단계까지 구현되어 있다. Mission control panel, grid map UI, command sender, persistent log subsystem은 목표 아키텍처로 유지하되 아직 구현 전이다.
 
 ---
 
 ## 2. 이 레포의 책임 범위
 
-| 담당 | 내용 |
-|------|------|
-| ✅ 담당 | 온보드 telemetry 수신·표시, 미션 상태 시각화, 격자·마커 맵 표시, vision debug 정보 표시, 고수준 명령 송신, 로그 저장·확인, 영상 스트림 표시 |
-| ❌ 미담당 | 자율주행 판단 (온보드 담당), 저수준 비행 제어 (ArduPilot 담당), 온보드 비전 처리 (uav-onboard 담당) |
+| 구분 | 내용 |
+|---|---|
+| 담당 | Onboard telemetry 수신/파싱/표시, raw debug video 수신/표시, GCS-side marker/line overlay, vision debug log, GCS discovery beacon, 추후 mission UI/command/log/grid map |
+| 미담당 | 자율주행 판단은 `uav-onboard` 담당, 저수준 비행 제어는 ArduPilot/Pixhawk 담당, onboard vision detection은 `uav-onboard` 담당 |
+
+중요한 역할 분리:
+
+- GCS는 ArUco/line detection을 로컬에서 다시 수행하지 않는다.
+- GCS는 onboard가 보낸 marker/line metadata만 사용해 raw camera 영상 위에 overlay를 그린다.
+- Debug video는 best-effort 관제 채널이다. 미션 판단은 telemetry와 onboard mission state를 기준으로 한다.
+- Camera window의 video latency/age 표시는 하지 않는다. Pi/Windows clock sync가 보장되지 않아 오해를 만들기 때문이다.
 
 ---
 
-## 3. 전체 드론 시스템에서 GCS의 위치
+## 3. 전체 시스템에서 GCS 위치
 
+```text
+Windows/Linux laptop
+  └─ uav-gcs
+       ├─ UDP telemetry receiver
+       ├─ UDP MJPEG debug video receiver
+       ├─ GCS-side overlay/log window
+       └─ future command UI
+
+Wi-Fi
+  ├─ telemetry UDP 14550: onboard -> GCS
+  ├─ command TCP 14551: GCS -> onboard, planned
+  ├─ video UDP 5600: onboard -> GCS, optional debug
+  └─ discovery UDP 5601: GCS -> LAN broadcast
+
+Raspberry Pi 4 + IMX519-78
+  └─ uav-onboard
+       ├─ camera / vision / telemetry
+       └─ future mission / MAVLink / safety
+
+UART MAVLink, planned
+  └─ Pixhawk / ArduPilot
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     노트북 (GCS)                         │
-│                                                          │
-│  ┌──────────────────────────────────────┐               │
-│  │           uav-gcs (이 레포)           │               │
-│  │  UI / Telemetry수신 / Command송신     │               │
-│  └──────────────┬──────────────┬────────┘               │
-│                 │ UDP/TCP      │ Video Stream            │
-└─────────────────┼──────────────┼─────────────────────────┘
-                  │              │  Wi-Fi
-┌─────────────────┼──────────────┼─────────────────────────┐
-│          Raspberry Pi 4 + IMX519-78                       │
-│                 │              │                          │
-│  ┌──────────────▼──────────────▼────────┐               │
-│  │         uav-onboard                  │               │
-│  │  Vision / Mission / Control /        │               │
-│  │  Autopilot / Telemetry / Safety      │               │
-│  └──────────────────────┬───────────────┘               │
-│                         │ UART MAVLink                   │
-└─────────────────────────┼───────────────────────────────┘
-                          │
-                  ┌───────▼────────┐
-                  │ Pixhawk 1      │
-                  │ (ArduPilot)    │
-                  └────────────────┘
-```
 
 ---
 
-## 4. 주요 기능 요구사항
+## 4. 현재 구현 상태
 
-### 4.1 모니터링 (수신·표시)
-
-| 항목 | 내용 |
-|------|------|
-| 미션 상태 | 현재 MissionState (IDLE / TAKEOFF / GRID_EXPLORE 등) |
-| 격자 정보 | 현재 격자 좌표 (row, col), heading, 방문 여부 |
-| 마커 맵 | 발견된 ArUco 마커 ID와 격자 좌표 목록 |
-| Vision Debug | line_offset, line_angle, intersection_score, marker_id 등 |
-| 드론 상태 | 고도, 배터리 전압/%, armed 상태, flight mode, failsafe |
-| Safety 이벤트 | line lost, GCS 통신 두절, 배터리 저전압 등 알림 |
-| 영상 | 카메라 영상 스트림 (별도 프로세스 또는 통합) |
-
-### 4.2 명령 (송신)
-
-| 명령 | 설명 |
-|------|------|
-| CMD_START | 미션 시작 |
-| CMD_ABORT | 미션 중단 후 복귀 |
-| CMD_EMERGENCY_LAND | 즉시 비상 착륙 |
-| CMD_SET_MARKER_COUNT | 탐색할 마커 총 개수 설정 |
-
-### 4.3 로그
-
-- 수신된 telemetry 로그를 파일로 저장
-- Safety 이벤트 및 명령 송신 이력 기록
-- GCS 실행 중 확인 가능한 이벤트 로그 뷰
+| 영역 | 상태 | 구현 위치 |
+|---|---|---|
+| Basic telemetry receiver | 구현됨 | `src/main.cpp`, `src/network/UdpTelemetryReceiver.*` |
+| Network config parsing | 구현됨 | `src/common/NetworkConfig.*` |
+| Telemetry v1.5 JSON parser | 구현됨 | `src/protocol/TelemetryMessage.*` |
+| Telemetry stats | 구현됨 | `src/protocol/TelemetryMessage.*` |
+| Video-only viewer | 구현됨 | `src/video_main.cpp`, `src/app/VideoViewerApp.*` |
+| Vision debug receiver | 구현됨 | `src/vision_debug_main.cpp`, `src/app/VisionDebugApp.*` |
+| UDP MJPEG chunk receiver/reassembler | 구현됨 | `src/video/UdpMjpegReceiver.*`, `src/video/JpegFrameReassembler.*` |
+| GCS discovery beacon | 구현됨 | `src/video/GcsDiscoveryBeacon.*` |
+| GCS-side line overlay | 구현됨 | `src/overlay/LineOverlay.*` |
+| GCS-side marker overlay | 구현됨 | `src/overlay/MarkerOverlay.*` |
+| OpenCV video window backend | 구현됨 | `src/ui/VideoWindow.cpp` |
+| Win32/WIC fallback video backend | 구현됨 | `src/ui/VideoWindowWin32.cpp` |
+| Vision log window/stdout fallback | 구현됨 | `src/ui/VisionLogWindow.*` |
+| Frame/telemetry matching store | 구현됨 | `src/telemetry/TelemetryStore.*` |
+| Vision/marker log formatting | 구현됨 | `src/telemetry/*Formatter.*` |
+| Mission control command sender | 미구현 | planned |
+| Grid map/mission state UI | 미구현 | `src/state/.gitkeep`, future UI |
+| Persistent log subsystem | 미구현 | `src/logging/.gitkeep` |
+| Dear ImGui full dashboard | 미구현 | future optional UI direction |
 
 ---
 
-## 5. 비기능 요구사항
+## 5. 주요 기능 요구사항
+
+### 5.1 현재 Vision Debug 요구사항
 
 | 항목 | 요구사항 |
-|------|----------|
-| 안정성 | 알 수 없는 telemetry 필드가 추가되어도 GCS가 크래시되지 않아야 함 |
-| 프로토콜 버전 관리 | 모든 메시지에 `protocol_version` 필드 포함, 버전 불일치 시 경고 표시 |
-| 지연 허용 | telemetry 1~2초 지연까지 정상으로 간주, 초과 시 연결 끊김 표시 |
-| 운용 환경 | Windows / Linux 노트북 양쪽에서 빌드 가능 |
-| UI 반응성 | 렌더링 루프가 네트워크 수신에 블로킹되지 않아야 함 |
-| Headless 없음 | GCS는 GUI 실행이 기본 (온보드와 반대) |
-| 빠른 개발 | 초기 MVP에서는 단순한 UI와 JSON 프로토콜로 시작 |
+|---|---|
+| Telemetry | UDP 14550에서 JSON telemetry를 수신하고 malformed packet에도 종료하지 않는다 |
+| Video | UDP 5600에서 `AQV1` MJPEG chunks를 받아 complete JPEG frame만 표시한다 |
+| Discovery | UDP 5601에 `AQGCS1 video_port=5600` beacon을 broadcast한다 |
+| Overlay | Onboard metadata로만 marker/line overlay를 그린다 |
+| Log | Vision log window에 packet/video/line/marker/system/camera/debug 정보를 표시한다 |
+| Responsiveness | Video receive thread가 socket을 계속 drain하고 UI draw와 분리된다 |
+| Debug video off | Camera window가 waiting이어도 telemetry/log가 들어오면 metadata-only 정상 실행으로 본다 |
+| Latency display | Video latency/age를 표시하지 않는다 |
 
----
-
-## 6. UI 화면 구성 제안
-
-### 6.1 권장 UI 프레임워크: **Dear ImGui + OpenCV**
-
-| 후보 | 장점 | 단점 |
-|------|------|------|
-| **Dear ImGui** | 빠른 개발, 크로스플랫폼, C++ 네이티브, 즉시 렌더링 | 고급 위젯 부족 |
-| Qt | 완성도 높은 위젯, 크로스플랫폼 | 빌드 복잡, 라이선스 |
-| OpenCV highgui | 영상 표시 간단 | UI 기능 빈약 |
-| TUI (ncurses) | 초경량 | 영상 표시 불가 |
-
-**결론**: Dear ImGui를 기본 UI로 사용하고, 영상 표시는 OpenCV 텍스처로 ImGui 창에 통합한다.  
-렌더링 백엔드는 SDL2 또는 GLFW + OpenGL을 사용한다.
-
-### 6.2 화면 레이아웃
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  [미션 제어 패널]          [드론 상태 패널]                   │
-│  - Marker Count 설정       - 고도 / 배터리 / Armed           │
-│  - START / ABORT /         - Flight Mode / Failsafe          │
-│    EMERGENCY LAND 버튼     - 연결 상태 (온보드 / Pixhawk)    │
-├──────────────────────┬──────────────────────────────────────┤
-│  [격자 맵 뷰]         │  [카메라 영상]                       │
-│  - 방문 교차점 표시   │  - 하향 카메라 스트림                │
-│  - 마커 위치/ID 표시  │  - Vision debug overlay 옵션         │
-│  - 현재 위치 강조     │                                      │
-├──────────────────────┴──────────────────────────────────────┤
-│  [Vision Debug 패널]       [이벤트 로그 뷰]                  │
-│  - line_offset / angle     - 최신 이벤트 스크롤              │
-│  - intersection_score      - Safety 이벤트 강조              │
-│  - marker_id 검출 여부     - 명령 송신 이력                  │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 7. 온보드 프로그램과의 통신 구조
-
-### 7.1 통신 방식 비교 및 권장안
-
-| 방식 | 장점 | 단점 | 평가 |
-|------|------|------|------|
-| **UDP** | 저지연, 구현 단순 | 신뢰성 없음 (패킷 손실) | ✅ telemetry에 적합 |
-| TCP | 신뢰성 보장 | 지연 발생 가능 | ✅ command에 적합 |
-| WebSocket | 브라우저 연동 가능 | 의존성 증가 | ❌ C++ 네이티브에 불필요 |
-| ZeroMQ | pub/sub, 유연 | 의존성, 복잡도 | △ 나중 확장 시 고려 |
-
-**권장**: **telemetry는 UDP**, **command는 TCP**로 분리한다.
-- UDP telemetry: 패킷 손실을 허용하되, sequence number로 손실 감지
-- TCP command: 명령 수신 확인(ACK) 보장
-
-### 7.2 포트 구성 (설정 파일로 변경 가능)
-
-| 채널 | 방향 | 방식 | 기본 포트 |
-|------|------|------|-----------|
-| Telemetry | 온보드 → GCS | UDP | 14550 |
-| Command | GCS → 온보드 | TCP | 14551 |
-| Video | 온보드 → GCS | UDP (MJPEG 또는 H.264) | 5600 |
-
----
-
-## 8. Telemetry Message 설계 방향
-
-### 8.1 초기 버전: JSON 기반
-
-```json
-{
-  "protocol_version": 1,
-  "msg_type": "STATUS",
-  "seq": 12345,
-  "timestamp_us": 1714000000000000,
-  "mission_state": "GRID_EXPLORE",
-  "grid_pos": { "row": 2, "col": 3 },
-  "heading_deg": 90.0,
-  "altitude_m": 1.2,
-  "battery_voltage": 11.8,
-  "battery_pct": 72,
-  "armed": true,
-  "flight_mode": "GUIDED",
-  "failsafe": false
-}
-```
-
-```json
-{
-  "protocol_version": 1,
-  "msg_type": "MARKER_FOUND",
-  "seq": 12346,
-  "timestamp_us": 1714000001000000,
-  "marker_id": 3,
-  "grid_pos": { "row": 2, "col": 3 }
-}
-```
-
-```json
-{
-  "protocol_version": 1,
-  "msg_type": "VISION_DEBUG",
-  "seq": 12347,
-  "timestamp_us": 1714000001500000,
-  "line_offset": -12.5,
-  "line_angle": 1.2,
-  "intersection_score": 0.87,
-  "marker_id": -1
-}
-```
-
-```json
-{
-  "protocol_version": 1,
-  "msg_type": "SAFETY_EVENT",
-  "seq": 12348,
-  "timestamp_us": 1714000002000000,
-  "event": "LINE_LOST",
-  "detail": "line not detected for 2.0s"
-}
-```
-
-### 8.2 메시지 타입 목록
-
-| msg_type | 주기/이벤트 | 내용 |
-|----------|-------------|------|
-| STATUS | 1Hz | 드론 전반 상태 |
-| GRID_MAP | 이벤트 | 방문한 교차점 전체 목록 |
-| MARKER_FOUND | 이벤트 | 새 마커 발견 |
-| MARKER_MAP | 이벤트 | 마커 전체 목록 |
-| VISION_DEBUG | 5~10Hz | Vision 측정값 |
-| SAFETY_EVENT | 이벤트 | Safety 경보 |
-| LOG | 이벤트 | 온보드 로그 메시지 |
-| MISSION_STATE_CHANGE | 이벤트 | 상태머신 전환 |
-
-### 8.3 향후 전환 방향
-
-JSON → **FlatBuffers** 또는 **MessagePack** (성능 부족 시)  
-프로토콜 버전 필드(`protocol_version`)를 유지하면 하위 호환 가능
-
----
-
-## 9. Command Message 설계 방향
-
-```json
-{
-  "protocol_version": 1,
-  "cmd_type": "CMD_START",
-  "seq": 1,
-  "timestamp_us": 1714000000000000
-}
-```
-
-```json
-{
-  "protocol_version": 1,
-  "cmd_type": "CMD_SET_MARKER_COUNT",
-  "seq": 2,
-  "timestamp_us": 1714000000000000,
-  "params": { "marker_count": 5 }
-}
-```
-
-### Command ACK (온보드 → GCS)
-
-```json
-{
-  "protocol_version": 1,
-  "msg_type": "CMD_ACK",
-  "seq": 2,
-  "ack_seq": 2,
-  "result": "OK",
-  "detail": ""
-}
-```
-
-| cmd_type | 설명 |
-|----------|------|
-| CMD_START | 미션 시작 |
-| CMD_ABORT | 미션 중단 후 복귀 |
-| CMD_EMERGENCY_LAND | 즉시 비상 착륙 |
-| CMD_SET_MARKER_COUNT | 탐색 마커 수 설정 |
-
----
-
-## 10. Video Stream 처리 방향
-
-### 초기 단계 (MVP)
-- 온보드에서 `libcamera-vid` 또는 OpenCV `VideoCapture`로 MJPEG UDP 스트리밍
-- GCS에서 OpenCV `VideoCapture("udp://...")` 로 수신
-- ImGui 창에 OpenCV 프레임을 OpenGL 텍스처로 렌더링
-
-### 향후 단계
-- GStreamer 파이프라인으로 H.264 인코딩 스트리밍
-- Vision debug overlay (line, intersection, marker bounding box) 옵션 추가
-
-### 분리 원칙
-- 영상 스트림은 telemetry/command 채널과 **완전히 분리**된 UDP 포트 사용
-- 영상 수신 스레드가 UI 렌더링을 블로킹하지 않도록 별도 스레드로 구성
-
----
-
-## 11. Logging 요구사항
+### 5.2 최종 Mission GCS 요구사항
 
 | 항목 | 내용 |
-|------|------|
-| Telemetry 로그 | 수신된 모든 JSON 패킷을 타임스탬프와 함께 파일 저장 |
-| 이벤트 로그 | 마커 발견, 상태 전환, Safety 이벤트, 명령 송신 이력 |
-| GCS 로그 | GCS 내부 오류, 연결 상태 변화 |
-| 파일 이름 | `logs/gcs_YYYYMMDD_HHMMSS.log` |
-| 형식 | 텍스트 (행당 `[타임스탬프] [레벨] 메시지`) |
-| UI 뷰 | GCS 화면 내 이벤트 로그 스크롤 뷰 (최근 N줄) |
+|---|---|
+| Mission state | IDLE/TAKEOFF/GRID_EXPLORE 등 onboard mission state 표시 |
+| Grid map | 현재 격자 좌표, 방문 여부, marker 위치 표시 |
+| Command | START/ABORT/EMERGENCY LAND/marker count command 송신 |
+| Drone state | battery, altitude, armed, flight mode, failsafe 표시 |
+| Safety events | line lost, GCS lost, low voltage, Pixhawk heartbeat lost 경보 |
+| Logging | telemetry/event/command log 저장 및 replay |
 
 ---
 
-## 12. Safety/Emergency Command 요구사항
+## 6. UI 구조 방향
 
-| 요구사항 | 내용 |
-|----------|------|
-| 비상 버튼 위치 | UI에서 항상 눈에 잘 띄는 위치에 배치, 빨간색 강조 |
-| 오작동 방지 | EMERGENCY LAND는 확인 다이얼로그 또는 더블클릭으로 보호 |
-| 연결 상태 표시 | 온보드와 연결이 끊기면 UI에 명확히 표시 |
-| 명령 재전송 | CMD_EMERGENCY_LAND는 ACK 수신 전까지 N회 재전송 |
-| Safety 이벤트 강조 | SAFETY_EVENT 수신 시 UI에 경보 표시 (색상 변화 등) |
-| 명령 이력 | 모든 송신 명령과 ACK 결과를 로그에 기록 |
+### 6.1 Current UI
 
----
+현재 구현은 빠른 vision bring-up을 위한 경량 UI다.
 
-## 13. 권장 디렉토리 구조
+- `uav_gcs`: console telemetry receiver
+- `uav_gcs_video`: camera window only
+- `uav_gcs_vision_debug`: camera window + vision log window
+- Windows에서 OpenCV가 없어도 Win32/WIC backend로 JPEG decode와 drawing 가능
+- OpenCV가 있으면 OpenCV highgui backend 사용 가능
 
-아래 구조는 **UI 확장성**, **통신 안정성**, **팀 분업**, **유지보수성**을 고려하여 설계되었다.
+현재 camera window overlay:
 
+- `frame N`
+- ArUco marker box/corners/center/direction/label
+- Line contour in magenta
+- Line tracking point in green
+
+표시하지 않는 것:
+
+- Video latency/age
+- Onboard에서 이미 그려진 overlay
+
+### 6.2 Target Full Dashboard
+
+최종 dashboard는 다음 panel 구성을 목표로 한다.
+
+```text
+[Mission Control] [Drone/System State]
+[Grid/Marker Map] [Camera + Vision Overlay]
+[Vision Debug]    [Event/Command Log]
 ```
+
+Dear ImGui + OpenCV/texture 기반 UI는 여전히 장기 후보지만, 현재 코드에는 Dear ImGui가 포함되어 있지 않다. 현 단계에서는 vision debug window를 안정화하고, mission/control 기능이 생긴 뒤 full dashboard로 확장한다.
+
+---
+
+## 7. 통신 구조와 Protocol
+
+현재 공통 protocol 문서:
+
+- `uav-onboard/docs/PROTOCOL.md`
+- `uav-gcs/docs/PROTOCOL.md`
+
+현재 version은 v1.5이며 JSON top-level `protocol_version`은 integer `1`이다.
+
+| Channel | Direction | Transport | Port | Status |
+|---|---|---|---:|---|
+| Telemetry | onboard -> GCS | UDP JSON | 14550 | implemented |
+| Command | GCS -> onboard | TCP JSON | 14551 | planned |
+| Video | onboard -> GCS | UDP MJPEG chunks | 5600 | implemented |
+| GCS discovery | GCS -> LAN broadcast | UDP text beacon | 5601 | implemented |
+
+GCS parser requirements:
+
+- Unknown fields are ignored.
+- Legacy summary fields and current nested fields are both tolerated where implemented.
+- Malformed JSON is dropped and counted, not fatal.
+- Packet sequence stats track dropped/duplicate/out-of-order packets.
+
+Video rules:
+
+- `AQV1` UDP chunk header + JPEG payload.
+- Maximum payload per datagram is 1200 bytes.
+- Only complete frames are displayed.
+- Incomplete, old, or mismatched chunks are counted for diagnostics.
+- Last complete frame is retained through temporary UDP drops.
+
+---
+
+## 8. 주요 Telemetry 표시 항목
+
+GCS vision log는 다음 정보를 표시한다.
+
+| Group | Fields |
+|---|---|
+| Vision timing | processing, read, decode, aruco, line, JSON build/send, video submit/send |
+| Camera | sensor, index, size, configured/measured FPS, autofocus, lens, exposure, shutter, gain, AWB |
+| System | board, OS, uptime, load, memory, throttling, Wi-Fi signal/bitrate |
+| Packets/video | received, dropped, duplicate, out-of-order, telemetry bytes, JPEG bytes, chunks, target FPS, sent/skipped/dropped/failures |
+| Line | detected, tracking point, offset, angle, confidence, contour points |
+| Line debug | raw/filtered/held/rejected, masks, contours, candidates, ROI pixels |
+| Markers | count, id, center, orientation |
+
+Video latency/age는 표시하지 않는다. 정확한 end-to-end video latency가 필요하면 clock sync 또는 별도 round-trip 측정 protocol을 설계해야 한다.
+
+---
+
+## 9. 현재 디렉토리 구조와 파일 역할
+
+```text
 uav-gcs/
-│
-├── CMakeLists.txt              # 루트 빌드 파일
-├── PROJECT_SPEC.md             # 이 문서
-├── README.md                   # 빌드·실행 빠른 안내
-│
-├── config/                     # 런타임 설정 파일
-│   ├── network.toml            # 온보드 IP, 포트 설정
-│   └── ui.toml                 # 창 크기, 레이아웃 옵션
-│
-├── src/                        # 소스 코드
-│   ├── main.cpp                # 진입점: 초기화, 메인 루프
-│   │
-│   ├── network/                # 네트워크 통신 레이어
-│   │   ├── TelemetryReceiver.hpp   # UDP telemetry 수신
-│   │   ├── TelemetryReceiver.cpp
-│   │   ├── CommandSender.hpp       # TCP command 송신
-│   │   ├── CommandSender.cpp
-│   │   ├── VideoReceiver.hpp       # UDP 영상 수신 (OpenCV)
-│   │   └── VideoReceiver.cpp
-│   │
-│   ├── protocol/               # 메시지 직렬화·역직렬화
-│   │   ├── Messages.hpp            # 모든 메시지 타입 정의
-│   │   ├── TelemetryParser.hpp     # JSON → 구조체 변환
-│   │   ├── TelemetryParser.cpp
-│   │   ├── CommandSerializer.hpp   # 구조체 → JSON 변환
-│   │   └── CommandSerializer.cpp
-│   │
-│   ├── state/                  # GCS 내부 상태 관리
-│   │   ├── DroneState.hpp          # 수신된 드론 상태 보관
-│   │   ├── DroneState.cpp
-│   │   ├── GridMapState.hpp        # 격자 맵·마커 맵 보관
-│   │   └── GridMapState.cpp
-│   │
-│   ├── ui/                     # Dear ImGui 기반 UI
-│   │   ├── AppWindow.hpp           # 최상위 ImGui 앱 루프
-│   │   ├── AppWindow.cpp
-│   │   ├── panels/
-│   │   │   ├── MissionControlPanel.hpp   # START/ABORT/EMERG 버튼
-│   │   │   ├── MissionControlPanel.cpp
-│   │   │   ├── DroneStatusPanel.hpp      # 고도/배터리/모드
-│   │   │   ├── DroneStatusPanel.cpp
-│   │   │   ├── GridMapPanel.hpp          # 격자 맵 시각화
-│   │   │   ├── GridMapPanel.cpp
-│   │   │   ├── VisionDebugPanel.hpp      # Vision 측정값
-│   │   │   ├── VisionDebugPanel.cpp
-│   │   │   ├── VideoPanel.hpp            # 카메라 영상
-│   │   │   ├── VideoPanel.cpp
-│   │   │   ├── EventLogPanel.hpp         # 이벤트 로그 뷰
-│   │   │   └── EventLogPanel.cpp
-│   │   └── widgets/
-│   │       ├── ConnectionIndicator.hpp   # 연결 상태 표시 위젯
-│   │       └── EmergencyButton.hpp       # 비상 버튼 (보호 포함)
-│   │
-│   ├── logging/                # GCS 로그 기록
-│   │   ├── GcsLogger.hpp
-│   │   └── GcsLogger.cpp
-│   │
-│   └── common/                 # 공통 유틸리티
-│       ├── Config.hpp              # 설정 파일 파서
-│       ├── Config.cpp
-│       └── Types.hpp               # 공통 데이터 구조
-│
-├── tests/                      # 단위 테스트 (Google Test)
-│   ├── CMakeLists.txt
-│   ├── protocol/
-│   │   ├── test_telemetry_parser.cpp
-│   │   └── test_command_serializer.cpp
-│   └── state/
-│       └── test_grid_map_state.cpp
-│
-├── tools/                      # 개발·디버그 도구
-│   ├── mock_onboard.cpp        # 온보드 없이 telemetry 생성 (테스트용)
-│   └── log_replayer.cpp        # 저장된 로그를 재생해 UI 동작 확인
-│
-├── scripts/                    # 빌드·실행 스크립트
-│   ├── build.sh                # 빌드 자동화
-│   └── run_gcs.sh              # 설정 파일 경로 전달 후 실행
-│
-├── docs/                       # 추가 설계 문서
-│   ├── protocol_messages.md    # 메시지 타입 전체 명세
-│   └── ui_layout.md            # UI 레이아웃 상세 설명
-│
-└── logs/                       # 런타임 로그 (gitignore)
-    └── .gitkeep
+├─ .gitignore
+├─ CMakeLists.txt
+├─ PROJECT_SPEC.md
+├─ README.md
+├─ config/
+│  ├─ network.toml
+│  └─ ui.toml
+├─ docs/PROTOCOL.md
+├─ logs/.gitkeep
+├─ scripts/.gitkeep
+├─ src/
+│  ├─ app/
+│  │  ├─ VideoViewerApp.cpp
+│  │  ├─ VideoViewerApp.hpp
+│  │  ├─ VisionDebugApp.cpp
+│  │  └─ VisionDebugApp.hpp
+│  ├─ common/
+│  │  ├─ NetworkConfig.cpp
+│  │  └─ NetworkConfig.hpp
+│  ├─ logging/.gitkeep
+│  ├─ main.cpp
+│  ├─ network/
+│  │  ├─ UdpTelemetryReceiver.cpp
+│  │  └─ UdpTelemetryReceiver.hpp
+│  ├─ overlay/
+│  │  ├─ LineOverlay.cpp
+│  │  ├─ LineOverlay.hpp
+│  │  ├─ MarkerOverlay.cpp
+│  │  ├─ MarkerOverlay.hpp
+│  │  └─ OverlayPrimitive.hpp
+│  ├─ protocol/
+│  │  ├─ TelemetryMessage.cpp
+│  │  └─ TelemetryMessage.hpp
+│  ├─ state/.gitkeep
+│  ├─ telemetry/
+│  │  ├─ MarkerLogFormatter.cpp
+│  │  ├─ MarkerLogFormatter.hpp
+│  │  ├─ TelemetryStore.cpp
+│  │  ├─ TelemetryStore.hpp
+│  │  ├─ VisionLogFormatter.cpp
+│  │  └─ VisionLogFormatter.hpp
+│  ├─ ui/
+│  │  ├─ VideoWindow.cpp
+│  │  ├─ VideoWindow.hpp
+│  │  ├─ VideoWindowWin32.cpp
+│  │  ├─ VisionLogWindow.cpp
+│  │  └─ VisionLogWindow.hpp
+│  ├─ video/
+│  │  ├─ GcsDiscoveryBeacon.cpp
+│  │  ├─ GcsDiscoveryBeacon.hpp
+│  │  ├─ JpegFrameReassembler.cpp
+│  │  ├─ JpegFrameReassembler.hpp
+│  │  ├─ UdpMjpegReceiver.cpp
+│  │  ├─ UdpMjpegReceiver.hpp
+│  │  ├─ VideoPacket.cpp
+│  │  └─ VideoPacket.hpp
+│  ├─ video_main.cpp
+│  └─ vision_debug_main.cpp
+├─ test_data/telemetry/.gitkeep
+├─ tests/
+│  ├─ CMakeLists.txt
+│  ├─ test_line_overlay.cpp
+│  ├─ test_telemetry_line_parse.cpp
+│  └─ test_video_reassembler.cpp
+├─ third_party/.gitkeep
+└─ tools/
+   ├─ log_replayer.cpp
+   └─ mock_onboard.cpp
 ```
 
-### 구조 설계 근거
+Root/config/docs:
 
-| 결정 | 이유 |
-|------|------|
-| `network/`와 `protocol/` 분리 | 통신 방식(UDP/TCP) 교체 시 protocol 레이어 영향 없음 |
-| `state/` 별도 분리 | UI 패널들이 DroneState를 공유 참조, 네트워크 코드와 독립 |
-| `ui/panels/`와 `ui/widgets/` 분리 | 패널은 기능 단위, 위젯은 재사용 가능한 UI 컴포넌트 |
-| `tools/mock_onboard` | 드론 없이 노트북만으로 GCS UI 개발·테스트 가능 |
-| `tools/log_replayer` | 비행 후 로그를 재생해 UI 동작 검증 가능 |
-| `config/` toml 파일 | IP·포트를 코드 재빌드 없이 현장에서 변경 가능 |
+| 파일 | 역할 |
+|---|---|
+| `CMakeLists.txt` | build graph, dependencies, OpenCV/Win32 backend selection, apps/tools/tests |
+| `README.md` | 현행 build/run/vision debug guide |
+| `config/network.toml` | onboard address/ports/timeouts |
+| `config/ui.toml` | window/layout/video window config. `show_latency=false` |
+| `docs/PROTOCOL.md` | onboard/GCS common protocol spec |
+
+Apps:
+
+| 파일 | 역할 |
+|---|---|
+| `src/main.cpp` | `uav_gcs` basic telemetry receiver |
+| `src/video_main.cpp` | `uav_gcs_video` CLI entry |
+| `src/vision_debug_main.cpp` | `uav_gcs_vision_debug` CLI entry |
+| `src/app/VideoViewerApp.*` | video-only app orchestration |
+| `src/app/VisionDebugApp.*` | telemetry thread, video thread, overlay, log orchestration |
+
+Core modules:
+
+| 파일 | 역할 |
+|---|---|
+| `src/common/NetworkConfig.*` | config parsing |
+| `src/network/UdpTelemetryReceiver.*` | UDP telemetry socket receive |
+| `src/protocol/TelemetryMessage.*` | telemetry parse and stats |
+| `src/overlay/*` | backend-independent overlay primitive generation |
+| `src/telemetry/TelemetryStore.*` | frame_seq/timestamp based metadata matching |
+| `src/telemetry/*Formatter.*` | human-readable vision/marker log formatting |
+| `src/ui/VideoWindow.*` | video window interface and OpenCV backend |
+| `src/ui/VideoWindowWin32.cpp` | Windows WIC/GDI fallback backend |
+| `src/ui/VisionLogWindow.*` | separate log window/stdout fallback |
+| `src/video/*` | discovery, UDP MJPEG receive, packet parse, JPEG reassembly |
+
+Tests/tools:
+
+| 파일 | 역할 |
+|---|---|
+| `tests/test_telemetry_line_parse.cpp` | v1.5 line/debug telemetry parse regression |
+| `tests/test_video_reassembler.cpp` | video chunk reassembly/drop stats regression |
+| `tests/test_line_overlay.cpp` | line overlay primitive regression |
+| `tools/mock_onboard.cpp` | basic telemetry mock sender |
+| `tools/log_replayer.cpp` | replay placeholder |
+
+Placeholders:
+
+- `src/logging/.gitkeep`: persistent log subsystem 예정
+- `src/state/.gitkeep`: mission/grid/drone state model 예정
+- `scripts/.gitkeep`: future build/run helper scripts
+- `third_party/.gitkeep`: future vendored dependencies
+
+전체 tracked 파일 인덱스:
+
+```text
+.gitignore
+CMakeLists.txt
+PROJECT_SPEC.md
+README.md
+config/network.toml
+config/ui.toml
+docs/PROTOCOL.md
+logs/.gitkeep
+scripts/.gitkeep
+src/app/.gitkeep
+src/app/VideoViewerApp.cpp
+src/app/VideoViewerApp.hpp
+src/app/VisionDebugApp.cpp
+src/app/VisionDebugApp.hpp
+src/common/.gitkeep
+src/common/NetworkConfig.cpp
+src/common/NetworkConfig.hpp
+src/logging/.gitkeep
+src/main.cpp
+src/network/.gitkeep
+src/network/UdpTelemetryReceiver.cpp
+src/network/UdpTelemetryReceiver.hpp
+src/overlay/LineOverlay.cpp
+src/overlay/LineOverlay.hpp
+src/overlay/MarkerOverlay.cpp
+src/overlay/MarkerOverlay.hpp
+src/overlay/OverlayPrimitive.hpp
+src/protocol/.gitkeep
+src/protocol/TelemetryMessage.cpp
+src/protocol/TelemetryMessage.hpp
+src/state/.gitkeep
+src/telemetry/MarkerLogFormatter.cpp
+src/telemetry/MarkerLogFormatter.hpp
+src/telemetry/TelemetryStore.cpp
+src/telemetry/TelemetryStore.hpp
+src/telemetry/VisionLogFormatter.cpp
+src/telemetry/VisionLogFormatter.hpp
+src/ui/.gitkeep
+src/ui/VideoWindow.cpp
+src/ui/VideoWindow.hpp
+src/ui/VideoWindowWin32.cpp
+src/ui/VisionLogWindow.cpp
+src/ui/VisionLogWindow.hpp
+src/video/GcsDiscoveryBeacon.cpp
+src/video/GcsDiscoveryBeacon.hpp
+src/video/JpegFrameReassembler.cpp
+src/video/JpegFrameReassembler.hpp
+src/video/UdpMjpegReceiver.cpp
+src/video/UdpMjpegReceiver.hpp
+src/video/VideoPacket.cpp
+src/video/VideoPacket.hpp
+src/video_main.cpp
+src/vision_debug_main.cpp
+test_data/telemetry/.gitkeep
+tests/CMakeLists.txt
+tests/test_line_overlay.cpp
+tests/test_telemetry_line_parse.cpp
+tests/test_video_reassembler.cpp
+third_party/.gitkeep
+tools/log_replayer.cpp
+tools/mock_onboard.cpp
+```
 
 ---
 
-## 14. 빌드/실행 방향
+## 10. Build, Run, Test
 
-### 의존성
-
-| 라이브러리 | 용도 | 설치 |
-|------------|------|------|
-| Dear ImGui | UI 렌더링 | 소스 내 포함 또는 서브모듈 |
-| GLFW3 | OpenGL 창 관리 | 패키지 매니저 |
-| OpenGL | 렌더링 백엔드 | 시스템 제공 |
-| OpenCV 4.x | 영상 수신·표시 | 패키지 매니저 |
-| nlohmann/json | JSON 파싱 | 헤더 온리, 포함 |
-| Google Test | 단위 테스트 | 패키지 매니저 |
-
-### 빌드
+Build:
 
 ```bash
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j$(nproc)
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
 ```
 
-### 실행
+Windows Ninja run:
 
-```bash
-./uav_gcs --config ../config/
+```powershell
+.\build\uav_gcs.exe --config config
+.\build\uav_gcs_video.exe --config config
+.\build\uav_gcs_vision_debug.exe --config config
 ```
 
-### 단위 테스트
+Vision debug normal flow:
 
-```bash
-cmake .. -DBUILD_TESTS=ON
-make -j$(nproc)
-ctest --output-on-failure
+```powershell
+# laptop
+.\build\uav_gcs_vision_debug.exe --config config
 ```
 
-### Mock 온보드 실행 (드론 없이 UI 테스트)
-
 ```bash
-./tools/mock_onboard --gcs-ip 127.0.0.1
+# Raspberry Pi, metadata-only
+./build/vision_debug_node --config config --line-only --line-mode light_on_dark
+
+# Raspberry Pi, camera/overlay visual debug
+./build/vision_debug_node --config config --line-only --line-mode light_on_dark --video
+```
+
+Tests:
+
+```powershell
+cmake -S . -B build-tests -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
+cmake --build build-tests
+ctest --test-dir build-tests --output-on-failure
 ```
 
 ---
 
-## 15. 개발 우선순위
+## 11. Nonfunctional Requirements
 
-| 단계 | 작업 | 검증 방법 |
-|------|------|-----------|
-| 1 | `common/Types.hpp` — 공통 데이터 구조 정의 | 코드 리뷰 |
-| 2 | `protocol/` — JSON 파싱·직렬화 | 단위 테스트 |
-| 3 | `network/TelemetryReceiver` — UDP 수신 | mock_onboard로 수신 확인 |
-| 4 | `network/CommandSender` — TCP 송신 | mock_onboard ACK 확인 |
-| 5 | `state/DroneState`, `GridMapState` — 상태 보관 | 단위 테스트 |
-| 6 | `ui/AppWindow` + Dear ImGui 기본 루프 | 빈 창 실행 확인 |
-| 7 | `ui/panels/DroneStatusPanel` | mock 데이터로 표시 확인 |
-| 8 | `ui/panels/MissionControlPanel` | 명령 송신 및 ACK 확인 |
-| 9 | `ui/panels/GridMapPanel` | 격자·마커 시각화 확인 |
-| 10 | `ui/panels/VisionDebugPanel` | Vision 수치 표시 확인 |
-| 11 | `network/VideoReceiver` + `ui/panels/VideoPanel` | 영상 스트림 표시 |
-| 12 | `logging/GcsLogger` | 로그 파일 생성 확인 |
-| 13 | `tools/log_replayer` | 로그 재생 UI 확인 |
-| 14 | 온보드와 통합 테스트 | 실제 드론 연결 |
+| 항목 | 요구사항 |
+|---|---|
+| Stability | Unknown telemetry fields, malformed packets, incomplete video frames must not crash GCS |
+| UI responsiveness | Socket receive must not be blocked by drawing/decode |
+| Cross-platform | Windows is first-class; Linux should remain buildable where OpenCV is available |
+| Low operator confusion | Metadata-only mode and video-off state must be clear in logs |
+| Mission separation | GCS visualization must not become required for onboard mission logic |
+| Debug honesty | Do not show misleading video latency without synchronized clocks |
+| Compatibility | Protocol parsers ignore unknown fields and preserve backward-compatible summary fields |
 
 ---
 
-## 16. 향후 확장 가능성
+## 12. Safety and Command Requirements
+
+Command channel is planned, not implemented. Target command messages:
+
+| Command | 설명 |
+|---|---|
+| `start_mission` | mission start |
+| `abort_mission` | mission abort/return |
+| `emergency_land` | immediate landing |
+| `set_marker_count` | expected marker count 설정 |
+| `request_status` | immediate status request |
+
+UI requirements when implemented:
+
+- Emergency land는 항상 접근 가능하되 오작동 방지를 위한 confirmation이 필요하다.
+- Command ACK timeout/retry를 표시해야 한다.
+- Command send history는 event log에 남겨야 한다.
+- GCS connection lost와 onboard safety event는 눈에 띄게 표시해야 한다.
+
+---
+
+## 13. 개발 우선순위
+
+| 순서 | 작업 | 이유/검증 |
+|---:|---|---|
+| 1 | 현재 vision debug receiver 안정화 유지 | line/ArUco tuning의 기본 관제 도구 |
+| 2 | Telemetry raw log 저장 | 비행/테스트 재현성 확보 |
+| 3 | Mission/drone state model 추가 | full dashboard의 데이터 중심 |
+| 4 | Command sender TCP channel 구현 | START/ABORT/EMERGENCY LAND |
+| 5 | Mission control panel 추가 | 운용 UI 시작점 |
+| 6 | Grid/marker map panel 추가 | 대회 미션 관제 핵심 |
+| 7 | Event/command log panel 추가 | safety/command 추적 |
+| 8 | Full dashboard framework 결정 | Dear ImGui/Qt/기존 Win32 확장 중 선택 |
+| 9 | Log replay tool 구현 | 보고서/디버깅 재현 |
+| 10 | Onboard mission/MAVLink와 통합 테스트 | 실제 mission loop 검증 |
+
+---
+
+## 14. 향후 확장 가능성
 
 | 항목 | 방향 |
-|------|------|
-| 프로토콜 전환 | JSON → MessagePack 또는 FlatBuffers (성능 부족 시) |
-| 다중 드론 | `DroneState`를 `drone_id` 기반 맵으로 확장 |
-| 웹 기반 GCS | `protocol/` 레이어를 WebSocket 서버로 래핑 |
-| 미션 기록 재생 | `log_replayer` 확장으로 전체 미션 시각적 재생 |
-| 알림 소리 | Safety 이벤트 발생 시 경보음 출력 |
-| 설정 UI | config 파일을 GCS 내에서 편집 가능하도록 |
-| ZeroMQ | pub/sub 구조로 전환 시 다중 구독자 지원 가능 |
-
----
-
-*최종 수정: 2026-04-24 | 작성: 윤민석*
+|---|---|
+| Protocol 최적화 | JSON 부하가 커지면 MessagePack/FlatBuffers 검토 |
+| Full dashboard | 현재 debug window에서 mission dashboard로 확장 |
+| Multi-run replay | telemetry/video log 기반 test replay |
+| 다중 드론 | drone_id 기반 state map으로 확장 |
+| Web viewer | GCS protocol layer를 WebSocket bridge로 래핑 |
+| Config UI | `config/*.toml` 일부 값을 GCS에서 편집/전송 |
