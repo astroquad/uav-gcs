@@ -1,7 +1,7 @@
 # Astroquad Onboard-GCS Protocol
 
 Version: v1.5
-Last updated: 2026-04-28
+Last updated: 2026-04-29
 This file must stay identical in `uav-onboard/docs/PROTOCOL.md` and `uav-gcs/docs/PROTOCOL.md`.
 
 ## 1. Channels
@@ -66,8 +66,8 @@ Required top-level fields:
     "status": "streaming",
     "sensor_model": "imx519",
     "camera_index": 0,
-    "width": 1280,
-    "height": 960,
+    "width": 960,
+    "height": 720,
     "fps": 12.0,
     "configured_fps": 12.0,
     "measured_capture_fps": 11.8,
@@ -136,7 +136,7 @@ Required top-level fields:
     "capture_fps": 11.8,
     "processing_fps": 11.7,
     "debug_video_send_fps": 5.0,
-    "video_chunk_pacing_us": 250,
+    "video_chunk_pacing_us": 150,
     "cpu_temp_c": 62.5,
     "telemetry_bytes": 980,
     "video_jpeg_bytes": 24576,
@@ -308,3 +308,4 @@ Command messages will use JSON with the same common top-level fields and will re
 | v1.3 | 2026-04-28 | No schema change; high-altitude line detector/stabilizer tuning continues to use the existing `vision.line.*` and `debug.line_*` fields. |
 | v1.4 | 2026-04-28 | Added debug video chunk/send/skip counters and optional Pi CPU temperature telemetry for diagnosing frame drops and thermal throttling. |
 | v1.5 | 2026-04-28 | Added Raspberry Pi 4 + IMX519 camera/system telemetry, capture/processing FPS, debug video pacing config, and video send failure counters. |
+| v1.5 | 2026-04-29 | No schema change; synchronized example defaults to the performance profile: 960x720 camera, 5 FPS opt-in debug video, and 150us chunk pacing. |
