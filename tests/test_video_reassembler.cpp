@@ -33,7 +33,6 @@ int main()
     const auto frame = reassembler.acceptPacket(header(1, 1, 2, sizeof(b)), b, sizeof(b));
     assert(frame);
     assert(frame->frame_id == 1);
-    assert(frame->received_steady_ms > 0);
     assert(frame->data.size() == sizeof(a) + sizeof(b));
     auto stats = reassembler.stats();
     assert(stats.completed_frames == 1);

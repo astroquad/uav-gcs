@@ -1,6 +1,5 @@
 #include "telemetry/TelemetryStore.hpp"
 
-#include <chrono>
 #include <utility>
 
 namespace gcs::telemetry {
@@ -9,14 +8,6 @@ namespace {
 std::int64_t absoluteDelta(std::int64_t left, std::int64_t right)
 {
     return left > right ? left - right : right - left;
-}
-
-std::int64_t steadyTimestampMs()
-{
-    const auto now = std::chrono::steady_clock::now();
-    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        now.time_since_epoch());
-    return ms.count();
 }
 
 } // namespace
@@ -30,7 +21,6 @@ void TelemetryStore::observe(const protocol::TelemetryMessage& message)
     VisionFrame frame;
     frame.frame_seq = message.camera.frame_seq;
     frame.timestamp_ms = message.timestamp_ms;
-    frame.received_steady_ms = steadyTimestampMs();
     frame.system = message.system;
     frame.camera = message.camera;
     frame.width = message.camera.width;

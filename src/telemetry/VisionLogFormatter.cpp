@@ -1,6 +1,5 @@
 #include "telemetry/VisionLogFormatter.hpp"
 
-#include <algorithm>
 #include <iomanip>
 #include <sstream>
 
@@ -8,17 +7,11 @@ namespace gcs::telemetry {
 
 std::string formatVisionLog(
     const VisionFrame& frame,
-    const protocol::TelemetryStats& stats,
-    std::int64_t now_ms)
+    const protocol::TelemetryStats& stats)
 {
-    const auto age_ms = frame.received_steady_ms > 0
-        ? std::max<std::int64_t>(0, now_ms - frame.received_steady_ms)
-        : 0;
-
     std::ostringstream stream;
     stream << std::fixed << std::setprecision(1)
            << "[vision] frame=" << frame.frame_seq
-           << " age=" << age_ms << "ms"
            << " processing=" << frame.processing_latency_ms << "ms"
            << " read=" << frame.read_frame_ms << "ms"
            << " decode=" << frame.jpeg_decode_ms << "ms"

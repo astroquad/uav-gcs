@@ -258,9 +258,9 @@ Rules:
 - Incomplete frames are dropped.
 - GCS keeps displaying the last complete frame if the next UDP frame is incomplete.
 - `timestamp_ms` is the onboard capture timestamp. It is useful for telemetry
-  correlation when clocks are synchronized, but GCS video UI displays local
-  frame age from receive/reassembly time so unsynchronized clocks cannot create
-  negative latency values.
+  correlation when clocks are synchronized. GCS does not display a video
+  latency estimate because the laptop and Pi clocks are not assumed to be
+  synchronized and the debug video path is best-effort.
 
 ## 5. GCS Discovery Beacon
 

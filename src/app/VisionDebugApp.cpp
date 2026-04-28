@@ -26,14 +26,6 @@
 namespace gcs::app {
 namespace {
 
-std::int64_t steadyTimestampMs()
-{
-    const auto now = std::chrono::steady_clock::now();
-    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        now.time_since_epoch());
-    return ms.count();
-}
-
 class TelemetryThread {
 public:
     bool start(
@@ -316,8 +308,7 @@ int VisionDebugApp::run(const VisionDebugOptions& options)
             if (const auto latest = telemetry_store.latest()) {
                 auto text = telemetry::formatVisionLog(
                     *latest,
-                    telemetry_thread.stats(),
-                    steadyTimestampMs());
+                    telemetry_thread.stats());
                 text += formatVideoStatsLine(
                     video_thread.stats(),
                     video_thread.overwrittenFrames(),

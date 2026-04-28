@@ -33,23 +33,6 @@ struct VideoWindowState {
     std::vector<overlay::OverlayPrimitive> overlays;
 };
 
-std::int64_t steadyTimestampMs()
-{
-    const auto now = std::chrono::steady_clock::now();
-    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        now.time_since_epoch());
-    return ms.count();
-}
-
-std::int64_t frameAgeMs(const video::JpegFrame& frame)
-{
-    if (frame.received_steady_ms == 0) {
-        return 0;
-    }
-    const auto age = steadyTimestampMs() - static_cast<std::int64_t>(frame.received_steady_ms);
-    return std::max<std::int64_t>(0, age);
-}
-
 std::wstring widen(const std::string& text)
 {
     if (text.empty()) {
@@ -486,10 +469,8 @@ bool VideoWindow::showFrame(
     state.height = height;
     state.bgra = std::move(pixels);
     state.overlays = overlays;
-    const auto age_ms = frameAgeMs(frame);
     state.overlay = widen(
-        "frame " + std::to_string(frame.frame_id) +
-        " age " + std::to_string(age_ms) + " ms");
+        "frame " + std::to_string(frame.frame_id));
 
     if (state.hwnd != nullptr) {
         InvalidateRect(state.hwnd, nullptr, FALSE);

@@ -10,4 +10,4 @@ show_event_log = true
 [video_window]
 title = "Astroquad Camera"
 timeout_ms = 2000
-show_latency = true
+show_latency = false

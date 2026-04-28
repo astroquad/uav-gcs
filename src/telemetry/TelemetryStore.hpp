@@ -14,7 +14,6 @@ namespace gcs::telemetry {
 struct VisionFrame {
     std::uint32_t frame_seq = 0;
     std::int64_t timestamp_ms = 0;
-    std::int64_t received_steady_ms = 0;
     protocol::SystemTelemetry system;
     protocol::CameraTelemetry camera;
     int width = 0;
