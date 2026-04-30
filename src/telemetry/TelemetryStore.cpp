@@ -30,6 +30,7 @@ void TelemetryStore::observe(const protocol::TelemetryMessage& message)
     frame.jpeg_decode_ms = message.debug.jpeg_decode_ms;
     frame.aruco_latency_ms = message.debug.aruco_latency_ms;
     frame.line_latency_ms = message.debug.line_latency_ms;
+    frame.intersection_latency_ms = message.debug.intersection_latency_ms;
     frame.telemetry_build_ms = message.debug.telemetry_build_ms;
     frame.telemetry_send_ms = message.debug.telemetry_send_ms;
     frame.video_submit_ms = message.debug.video_submit_ms;
@@ -54,6 +55,7 @@ void TelemetryStore::observe(const protocol::TelemetryMessage& message)
     frame.line_selected_contour_points = message.debug.line_selected_contour_points;
     frame.markers = message.vision.markers;
     frame.line = message.vision.line;
+    frame.intersection = message.vision.intersection;
 
     std::lock_guard<std::mutex> lock(mutex_);
     frames_.push_back(std::move(frame));

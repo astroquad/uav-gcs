@@ -207,6 +207,64 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
             valueOr<bool>(*vision, "intersection_detected", message.vision.intersection_detected);
         message.vision.intersection_score =
             valueOr<double>(*vision, "intersection_score", message.vision.intersection_score);
+        if (const auto intersection = vision->find("intersection");
+            intersection != vision->end() && intersection->is_object()) {
+            message.vision.intersection.valid =
+                valueOr<bool>(*intersection, "valid", message.vision.intersection.valid);
+            message.vision.intersection.detected =
+                valueOr<bool>(*intersection, "detected", message.vision.intersection.detected);
+            message.vision.intersection.type =
+                valueOr<std::string>(*intersection, "type", message.vision.intersection.type);
+            message.vision.intersection.raw_type =
+                valueOr<std::string>(*intersection, "raw_type", message.vision.intersection.raw_type);
+            message.vision.intersection.stable =
+                valueOr<bool>(*intersection, "stable", message.vision.intersection.stable);
+            message.vision.intersection.held =
+                valueOr<bool>(*intersection, "held", message.vision.intersection.held);
+            if (const auto center = intersection->find("center_px");
+                center != intersection->end()) {
+                message.vision.intersection.center_px = pointOr(*center);
+            }
+            if (const auto raw_center = intersection->find("raw_center_px");
+                raw_center != intersection->end()) {
+                message.vision.intersection.raw_center_px = pointOr(*raw_center);
+            }
+            message.vision.intersection.score =
+                valueOr<double>(*intersection, "score", message.vision.intersection.score);
+            message.vision.intersection.raw_score =
+                valueOr<double>(*intersection, "raw_score", message.vision.intersection.raw_score);
+            message.vision.intersection.branch_mask =
+                valueOr<int>(*intersection, "branch_mask", message.vision.intersection.branch_mask);
+            message.vision.intersection.branch_count =
+                valueOr<int>(*intersection, "branch_count", message.vision.intersection.branch_count);
+            message.vision.intersection.stable_frames =
+                valueOr<int>(*intersection, "stable_frames", message.vision.intersection.stable_frames);
+            message.vision.intersection.radius_px =
+                valueOr<double>(*intersection, "radius_px", message.vision.intersection.radius_px);
+            message.vision.intersection.selected_mask_index =
+                valueOr<int>(*intersection, "selected_mask_index", message.vision.intersection.selected_mask_index);
+            if (const auto branches = intersection->find("branches");
+                branches != intersection->end() && branches->is_array()) {
+                message.vision.intersection.branches.clear();
+                for (const auto& branch_json : *branches) {
+                    if (!branch_json.is_object()) {
+                        continue;
+                    }
+                    BranchTelemetry branch;
+                    branch.direction = valueOr<std::string>(branch_json, "direction", branch.direction);
+                    branch.present = valueOr<bool>(branch_json, "present", branch.present);
+                    branch.score = valueOr<double>(branch_json, "score", branch.score);
+                    if (const auto endpoint = branch_json.find("endpoint_px");
+                        endpoint != branch_json.end()) {
+                        branch.endpoint_px = pointOr(*endpoint);
+                    }
+                    branch.angle_deg = valueOr<double>(branch_json, "angle_deg", branch.angle_deg);
+                    message.vision.intersection.branches.push_back(branch);
+                }
+            }
+            message.vision.intersection_detected = message.vision.intersection.detected;
+            message.vision.intersection_score = message.vision.intersection.score;
+        }
         message.vision.marker_detected = valueOr<bool>(*vision, "marker_detected", message.vision.marker_detected);
         message.vision.marker_id = valueOr<int>(*vision, "marker_id", message.vision.marker_id);
         message.vision.marker_count = valueOr<int>(*vision, "marker_count", message.vision.marker_count);
@@ -266,6 +324,8 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
             valueOr<double>(*debug, "aruco_latency_ms", message.debug.aruco_latency_ms);
         message.debug.line_latency_ms =
             valueOr<double>(*debug, "line_latency_ms", message.debug.line_latency_ms);
+        message.debug.intersection_latency_ms =
+            valueOr<double>(*debug, "intersection_latency_ms", message.debug.intersection_latency_ms);
         message.debug.telemetry_build_ms =
             valueOr<double>(*debug, "telemetry_build_ms", message.debug.telemetry_build_ms);
         message.debug.telemetry_send_ms =

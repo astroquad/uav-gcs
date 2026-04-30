@@ -61,6 +61,29 @@ int main()
             { "x": 350.0, "y": 120.0 }
           ]
         },
+        "intersection_detected": true,
+        "intersection_score": 0.86,
+        "intersection": {
+          "valid": true,
+          "detected": true,
+          "type": "T",
+          "raw_type": "T",
+          "stable": true,
+          "held": false,
+          "center_px": { "x": 480.0, "y": 360.0 },
+          "raw_center_px": { "x": 478.0, "y": 358.0 },
+          "score": 0.86,
+          "raw_score": 0.83,
+          "branch_mask": 11,
+          "branch_count": 3,
+          "stable_frames": 4,
+          "radius_px": 8.0,
+          "selected_mask_index": 0,
+          "branches": [
+            { "direction": "front", "present": true, "score": 0.92, "endpoint_px": { "x": 480.0, "y": 180.0 }, "angle_deg": -90.0 },
+            { "direction": "right", "present": true, "score": 0.81, "endpoint_px": { "x": 720.0, "y": 360.0 }, "angle_deg": 0.0 }
+          ]
+        },
         "marker_detected": false,
         "marker_id": -1,
         "marker_count": 0,
@@ -72,6 +95,7 @@ int main()
         "jpeg_decode_ms": 0.7,
         "aruco_latency_ms": 1.0,
         "line_latency_ms": 2.0,
+        "intersection_latency_ms": 1.3,
         "telemetry_build_ms": 0.2,
         "telemetry_send_ms": 0.1,
         "video_submit_ms": 0.1,
@@ -116,7 +140,16 @@ int main()
     assert(!parsed->vision.line.held);
     assert(parsed->vision.line.raw_center_offset_px == -20.0);
     assert(parsed->vision.line.contour_px.size() == 2);
+    assert(parsed->vision.intersection_detected);
+    assert(parsed->vision.intersection.type == "T");
+    assert(parsed->vision.intersection.raw_type == "T");
+    assert(parsed->vision.intersection.stable);
+    assert(parsed->vision.intersection.branch_mask == 11);
+    assert(parsed->vision.intersection.branches.size() == 2);
+    assert(parsed->vision.intersection.branches[0].direction == "front");
+    assert(parsed->vision.intersection.branches[0].endpoint_px.y == 180.0);
     assert(parsed->debug.line_latency_ms == 2.0);
+    assert(parsed->debug.intersection_latency_ms == 1.3);
     assert(parsed->debug.video_send_ms == 4.5);
     assert(parsed->debug.capture_fps == 11.8);
     assert(parsed->debug.processing_fps == 11.7);

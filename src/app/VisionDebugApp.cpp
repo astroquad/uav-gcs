@@ -1,6 +1,7 @@
 #include "app/VisionDebugApp.hpp"
 
 #include "network/UdpTelemetryReceiver.hpp"
+#include "overlay/IntersectionOverlay.hpp"
 #include "overlay/LineOverlay.hpp"
 #include "overlay/MarkerOverlay.hpp"
 #include "protocol/TelemetryMessage.hpp"
@@ -265,6 +266,12 @@ int VisionDebugApp::run(const VisionDebugOptions& options)
             if (marker_frame) {
                 auto line_overlays = overlay::buildLineOverlays(marker_frame->line);
                 overlays.insert(overlays.end(), line_overlays.begin(), line_overlays.end());
+                auto intersection_overlays =
+                    overlay::buildIntersectionOverlays(marker_frame->intersection);
+                overlays.insert(
+                    overlays.end(),
+                    intersection_overlays.begin(),
+                    intersection_overlays.end());
                 auto marker_overlays = overlay::buildMarkerOverlays(marker_frame->markers);
                 overlays.insert(overlays.end(), marker_overlays.begin(), marker_overlays.end());
             }

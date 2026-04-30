@@ -23,6 +23,7 @@ struct VisionFrame {
     double jpeg_decode_ms = 0.0;
     double aruco_latency_ms = 0.0;
     double line_latency_ms = 0.0;
+    double intersection_latency_ms = 0.0;
     double telemetry_build_ms = 0.0;
     double telemetry_send_ms = 0.0;
     double video_submit_ms = 0.0;
@@ -47,6 +48,7 @@ struct VisionFrame {
     int line_selected_contour_points = 0;
     std::vector<protocol::MarkerTelemetry> markers;
     protocol::LineTelemetry line;
+    protocol::IntersectionTelemetry intersection;
 };
 
 using MarkerFrame = VisionFrame;

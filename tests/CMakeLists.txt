@@ -19,4 +19,11 @@ if(TARGET gcs_video)
     target_include_directories(test_line_overlay PRIVATE ../src)
     target_link_libraries(test_line_overlay PRIVATE gcs_video gcs_core)
     add_test(NAME line_overlay COMMAND test_line_overlay)
+
+    add_executable(test_intersection_overlay
+        test_intersection_overlay.cpp
+    )
+    target_include_directories(test_intersection_overlay PRIVATE ../src)
+    target_link_libraries(test_intersection_overlay PRIVATE gcs_video gcs_core)
+    add_test(NAME intersection_overlay COMMAND test_intersection_overlay)
 endif()

@@ -84,6 +84,7 @@ if(GCS_VIDEO_UI_SOURCE)
     add_library(gcs_video STATIC
         src/app/VideoViewerApp.cpp
         src/app/VisionDebugApp.cpp
+        src/overlay/IntersectionOverlay.cpp
         src/overlay/LineOverlay.cpp
         src/overlay/MarkerOverlay.cpp
         src/telemetry/MarkerLogFormatter.cpp

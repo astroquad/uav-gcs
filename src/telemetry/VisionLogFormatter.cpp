@@ -1,9 +1,29 @@
 #include "telemetry/VisionLogFormatter.hpp"
 
+#include <cctype>
 #include <iomanip>
 #include <sstream>
 
 namespace gcs::telemetry {
+namespace {
+
+std::string branchSummary(const protocol::IntersectionTelemetry& intersection)
+{
+    std::ostringstream stream;
+    for (std::size_t index = 0; index < intersection.branches.size(); ++index) {
+        if (index > 0) {
+            stream << ' ';
+        }
+        const auto& branch = intersection.branches[index];
+        const char label = branch.direction.empty()
+            ? '?'
+            : static_cast<char>(std::toupper(static_cast<unsigned char>(branch.direction.front())));
+        stream << label << ':' << branch.score;
+    }
+    return stream.str();
+}
+
+} // namespace
 
 std::string formatVisionLog(
     const VisionFrame& frame,
@@ -17,6 +37,7 @@ std::string formatVisionLog(
            << " decode=" << frame.jpeg_decode_ms << "ms"
            << " aruco=" << frame.aruco_latency_ms << "ms"
            << " line=" << frame.line_latency_ms << "ms"
+           << " ix=" << frame.intersection_latency_ms << "ms"
            << " json=" << frame.telemetry_build_ms << "ms"
            << " tsend=" << frame.telemetry_send_ms << "ms"
            << " vsubmit=" << frame.video_submit_ms << "ms"
@@ -82,6 +103,23 @@ std::string formatVisionLog(
            << " candidates=" << frame.line_candidates_evaluated
            << " roi_px=" << frame.line_roi_pixels
            << " selected_points=" << frame.line_selected_contour_points << "\n";
+
+    stream << "[intersection] type=" << frame.intersection.type
+           << " raw=" << frame.intersection.raw_type
+           << " stable=" << (frame.intersection.stable ? "yes" : "no")
+           << " held=" << (frame.intersection.held ? "yes" : "no")
+           << " valid=" << (frame.intersection.valid ? "yes" : "no")
+           << " detected=" << (frame.intersection.detected ? "yes" : "no")
+           << " score=" << frame.intersection.score
+           << " raw_score=" << frame.intersection.raw_score
+           << " center=(" << frame.intersection.center_px.x
+           << ',' << frame.intersection.center_px.y << ")"
+           << " raw_center=(" << frame.intersection.raw_center_px.x
+           << ',' << frame.intersection.raw_center_px.y << ")"
+           << " branches=" << branchSummary(frame.intersection)
+           << " mask=" << frame.intersection.branch_mask
+           << " count=" << frame.intersection.branch_count
+           << " stable_frames=" << frame.intersection.stable_frames << "\n";
 
     stream << "[markers] count=" << frame.markers.size() << "\n";
     if (frame.markers.empty()) {
