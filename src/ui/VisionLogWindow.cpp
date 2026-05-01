@@ -27,28 +27,43 @@ struct VisionLogWindowState {
     bool closed = false;
 };
 
+std::string normalizeLineEndings(const std::string& text)
+{
+    std::string output;
+    output.reserve(text.size() + 16);
+    for (std::size_t index = 0; index < text.size(); ++index) {
+        const char ch = text[index];
+        if (ch == '\n' && (index == 0 || text[index - 1] != '\r')) {
+            output.push_back('\r');
+        }
+        output.push_back(ch);
+    }
+    return output;
+}
+
 std::wstring widen(const std::string& text)
 {
-    if (text.empty()) {
+    const std::string normalized = normalizeLineEndings(text);
+    if (normalized.empty()) {
         return {};
     }
     const int length = MultiByteToWideChar(
         CP_UTF8,
         0,
-        text.c_str(),
-        static_cast<int>(text.size()),
+        normalized.c_str(),
+        static_cast<int>(normalized.size()),
         nullptr,
         0);
     if (length <= 0) {
-        return std::wstring(text.begin(), text.end());
+        return std::wstring(normalized.begin(), normalized.end());
     }
 
     std::wstring output(static_cast<std::size_t>(length), L'\0');
     MultiByteToWideChar(
         CP_UTF8,
         0,
-        text.c_str(),
-        static_cast<int>(text.size()),
+        normalized.c_str(),
+        static_cast<int>(normalized.size()),
         output.data(),
         length);
     return output;
