@@ -47,14 +47,14 @@ Point2f toOverlayPoint(const protocol::Point2f& point)
     return {point.x, point.y};
 }
 
-std::string lineLabel(const protocol::LineTelemetry& line)
+protocol::Point2f visualTrackingPoint(const protocol::LineTelemetry& line)
 {
-    std::ostringstream stream;
-    stream << std::fixed << std::setprecision(1)
-           << "LINE off " << line.center_offset_px
-           << " angle " << line.angle_deg
-           << " conf " << line.confidence;
-    return stream.str();
+    return line.raw_detected ? line.raw_tracking_point_px : line.tracking_point_px;
+}
+
+double visualCenterOffset(const protocol::LineTelemetry& line)
+{
+    return line.raw_detected ? line.raw_center_offset_px : line.center_offset_px;
 }
 
 } // namespace
@@ -86,10 +86,11 @@ std::vector<OverlayPrimitive> buildLineOverlays(
     const double center_y = frame_height > 0
         ? frame_height / 2.0
         : line.tracking_point_px.y;
+    const auto visual_tracking = visualTrackingPoint(line);
     const double center_x = frame_width > 0
         ? frame_width / 2.0
-        : line.tracking_point_px.x - line.center_offset_px;
-    const Point2f tracking_point {line.tracking_point_px.x, center_y};
+        : visual_tracking.x - visualCenterOffset(line);
+    const Point2f tracking_point {visual_tracking.x, center_y};
     const Point2f camera_center {center_x, center_y};
     overlays.push_back(makeLine(camera_center, tracking_point, green, 4));
     overlays.push_back(makeCircle(tracking_point, 12.0, red, -1));

@@ -124,8 +124,8 @@ Expected live overlay behavior:
   overlay by default.
 - Grid map: the vision log appends a live ASCII map from `GridMapTracker` when
   `vision.grid_node` telemetry records new local grid coordinates. Visited
-  nodes, the current heading marker, and discovered edges update as the snake
-  path advances.
+  nodes, the current heading marker, and discovered edges update in the fixed
+  top pane of the vision log window as the snake path advances.
 - If both detectors are enabled, both overlays are shown in the same video
   window using the same frame sequence synchronization.
 - The separate vision log window shows packet stats, marker state, line state,
@@ -136,9 +136,9 @@ Expected live overlay behavior:
   focus/exposure settings, capture/processing FPS, optional Pi CPU temperature,
   raw-vs-filtered line state, raw/stabilized intersection state,
   `[intersection-decision]` branch evidence, and `[grid-node]` local coordinate
-  events, followed by `[grid-map]` ASCII output when grid nodes have been
-  observed. If the log window backend is unavailable, the same text is printed
-  to the terminal.
+  events. The log window keeps `[grid-map]` in a separate fixed top pane and
+  detailed telemetry in the lower pane. If the log window backend is
+  unavailable, the same text is printed to the terminal.
 
 The current protocol document is v1.7. `protocol_version` remains integer `1`
 for compatibility, while new fields live under `vision.intersection_decision`,

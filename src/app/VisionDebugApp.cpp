@@ -324,17 +324,15 @@ int VisionDebugApp::run(const VisionDebugOptions& options)
 
         if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_log_time).count()
             >= options.marker_log_interval_ms) {
+            const auto grid_text = grid_map_tracker.render();
             if (const auto latest = telemetry_store.latest()) {
-                auto text = telemetry::formatVisionLog(
-                    *latest,
-                    telemetry_thread.stats(),
-                    grid_map_tracker.render());
+                auto text = telemetry::formatVisionLog(*latest, telemetry_thread.stats());
                 text += formatVideoStatsLine(
                     video_thread.stats(),
                     video_thread.overwrittenFrames(),
                     display_fps);
-                if (!log_window.update(text)) {
-                    std::cout << text;
+                if (!log_window.update(grid_text, text)) {
+                    std::cout << grid_text << text;
                 }
             } else {
                 const auto stats = telemetry_thread.stats();
@@ -346,8 +344,8 @@ int VisionDebugApp::run(const VisionDebugOptions& options)
                     video_thread.stats(),
                     video_thread.overwrittenFrames(),
                     display_fps);
-                if (!log_window.update(text)) {
-                    std::cout << text;
+                if (!log_window.update(grid_text, text)) {
+                    std::cout << grid_text << text;
                 }
             }
             last_log_time = now;

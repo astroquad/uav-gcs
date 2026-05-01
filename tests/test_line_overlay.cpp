@@ -8,6 +8,9 @@ int main()
     line.detected = true;
     line.tracking_point_px = {320.0, 336.0};
     line.center_offset_px = 0.0;
+    line.raw_detected = true;
+    line.raw_tracking_point_px = {380.0, 336.0};
+    line.raw_center_offset_px = 60.0;
     line.angle_deg = 0.0;
     line.confidence = 0.75;
     line.contour_px.push_back({280.0, 120.0});
@@ -30,6 +33,7 @@ int main()
             overlay.circle.color.g == 0 &&
             overlay.circle.color.b == 0) {
             saw_red_center_circle = true;
+            assert(overlay.circle.center.x == 380.0);
             assert(overlay.circle.center.y == 240.0);
         }
         if (overlay.type == gcs::overlay::OverlayPrimitive::Type::Line &&
@@ -39,6 +43,8 @@ int main()
             overlay.line.start.y == 240.0 &&
             overlay.line.end.y == 240.0) {
             saw_green_offset_line = true;
+            assert(overlay.line.start.x == 320.0);
+            assert(overlay.line.end.x == 380.0);
         }
     }
     assert(saw_red_center_circle);

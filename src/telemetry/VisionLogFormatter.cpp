@@ -43,8 +43,7 @@ std::string decisionBranchSummary(const protocol::IntersectionDecisionTelemetry&
 
 std::string formatVisionLog(
     const VisionFrame& frame,
-    const protocol::TelemetryStats& stats,
-    const std::string& grid_map_text)
+    const protocol::TelemetryStats& stats)
 {
     std::ostringstream stream;
     stream << std::fixed << std::setprecision(1)
@@ -178,10 +177,6 @@ std::string formatVisionLog(
                    << " center=(" << marker.center_px.x << ',' << marker.center_px.y << ")"
                    << " orientation=" << marker.orientation_deg << "deg\n";
         }
-    }
-
-    if (!grid_map_text.empty()) {
-        stream << grid_map_text;
     }
 
     return stream.str();

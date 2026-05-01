@@ -9,6 +9,7 @@
 
 #include <memory>
 #include <cstddef>
+#include <algorithm>
 #include <string>
 #include <utility>
 
@@ -21,7 +22,8 @@ constexpr wchar_t kWindowClassName[] = L"AstroquadVisionLogWindow";
 
 struct VisionLogWindowState {
     HWND hwnd = nullptr;
-    HWND edit = nullptr;
+    HWND grid_edit = nullptr;
+    HWND detail_edit = nullptr;
     bool closed = false;
 };
 
@@ -64,7 +66,7 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpara
     switch (message) {
     case WM_CREATE:
         if (state != nullptr) {
-            state->edit = CreateWindowExW(
+            state->grid_edit = CreateWindowExW(
                 WS_EX_CLIENTEDGE,
                 L"EDIT",
                 L"",
@@ -78,17 +80,42 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpara
                 nullptr,
                 GetModuleHandleW(nullptr),
                 nullptr);
-            SendMessageW(state->edit, WM_SETFONT, reinterpret_cast<WPARAM>(GetStockObject(ANSI_FIXED_FONT)), TRUE);
+            state->detail_edit = CreateWindowExW(
+                WS_EX_CLIENTEDGE,
+                L"EDIT",
+                L"",
+                WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_LEFT | ES_MULTILINE |
+                    ES_AUTOVSCROLL | ES_READONLY,
+                0,
+                0,
+                0,
+                0,
+                hwnd,
+                nullptr,
+                GetModuleHandleW(nullptr),
+                nullptr);
+            SendMessageW(state->grid_edit, WM_SETFONT, reinterpret_cast<WPARAM>(GetStockObject(ANSI_FIXED_FONT)), TRUE);
+            SendMessageW(state->detail_edit, WM_SETFONT, reinterpret_cast<WPARAM>(GetStockObject(ANSI_FIXED_FONT)), TRUE);
         }
         return 0;
     case WM_SIZE:
-        if (state != nullptr && state->edit != nullptr) {
+        if (state != nullptr && state->grid_edit != nullptr && state->detail_edit != nullptr) {
+            const int width = LOWORD(lparam);
+            const int height = HIWORD(lparam);
+            const int grid_height = std::clamp(height / 3, 120, 260);
             MoveWindow(
-                state->edit,
+                state->grid_edit,
                 0,
                 0,
-                LOWORD(lparam),
-                HIWORD(lparam),
+                width,
+                std::min(grid_height, height),
+                TRUE);
+            MoveWindow(
+                state->detail_edit,
+                0,
+                std::min(grid_height, height),
+                width,
+                std::max(0, height - grid_height),
                 TRUE);
         }
         return 0;
@@ -102,7 +129,8 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpara
         if (state != nullptr) {
             state->closed = true;
             state->hwnd = nullptr;
-            state->edit = nullptr;
+            state->grid_edit = nullptr;
+            state->detail_edit = nullptr;
         }
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
         return 0;
@@ -180,19 +208,27 @@ VisionLogWindow::~VisionLogWindow()
 
 bool VisionLogWindow::update(const std::string& text)
 {
+    return update({}, text);
+}
+
+bool VisionLogWindow::update(const std::string& grid_text, const std::string& detail_text)
+{
     auto* state = static_cast<VisionLogWindowState*>(native_state_);
     if (state == nullptr || state->closed) {
         return false;
     }
 #ifdef _WIN32
-    if (state->edit == nullptr) {
+    if (state->grid_edit == nullptr || state->detail_edit == nullptr) {
         return false;
     }
-    const std::wstring wide_text = widen(text);
-    SetWindowTextW(state->edit, wide_text.c_str());
+    const std::wstring wide_grid_text = widen(grid_text);
+    const std::wstring wide_detail_text = widen(detail_text);
+    SetWindowTextW(state->grid_edit, wide_grid_text.c_str());
+    SetWindowTextW(state->detail_edit, wide_detail_text.c_str());
     return true;
 #else
-    (void)text;
+    (void)grid_text;
+    (void)detail_text;
     return false;
 #endif
 }
@@ -215,7 +251,9 @@ bool VisionLogWindow::available() const
         return false;
     }
 #ifdef _WIN32
-    return state->hwnd != nullptr && state->edit != nullptr;
+    return state->hwnd != nullptr &&
+        state->grid_edit != nullptr &&
+        state->detail_edit != nullptr;
 #else
     return false;
 #endif

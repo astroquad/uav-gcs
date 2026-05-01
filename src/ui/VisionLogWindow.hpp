@@ -13,6 +13,7 @@ public:
     VisionLogWindow& operator=(const VisionLogWindow&) = delete;
 
     bool update(const std::string& text);
+    bool update(const std::string& grid_text, const std::string& detail_text);
     void poll();
     bool available() const;
 
