@@ -5,6 +5,7 @@
 #include "overlay/LineOverlay.hpp"
 #include "overlay/MarkerOverlay.hpp"
 #include "protocol/TelemetryMessage.hpp"
+#include "telemetry/GridMapTracker.hpp"
 #include "telemetry/TelemetryStore.hpp"
 #include "telemetry/VisionLogFormatter.hpp"
 #include "ui/VisionLogWindow.hpp"
@@ -32,7 +33,8 @@ public:
     bool start(
         std::uint16_t port,
         int timeout_ms,
-        telemetry::TelemetryStore& store)
+        telemetry::TelemetryStore& store,
+        telemetry::GridMapTracker& grid_map)
     {
         if (!receiver_.open(port)) {
             last_error_ = receiver_.lastError();
@@ -40,7 +42,7 @@ public:
         }
 
         running_ = true;
-        worker_ = std::thread([this, timeout_ms, &store]() {
+        worker_ = std::thread([this, timeout_ms, &store, &grid_map]() {
             while (running_) {
                 std::string payload;
                 if (!receiver_.receive(payload, std::clamp(timeout_ms, 1, 100))) {
@@ -63,6 +65,7 @@ public:
                     stats_.observe(*parsed);
                 }
                 store.observe(*parsed);
+                grid_map.observe(parsed->vision.grid_node);
             }
         });
         return true;
@@ -221,11 +224,13 @@ int VisionDebugApp::run(const VisionDebugOptions& options)
     }
 
     telemetry::TelemetryStore telemetry_store;
+    telemetry::GridMapTracker grid_map_tracker;
     TelemetryThread telemetry_thread;
     if (!telemetry_thread.start(
             options.telemetry_port,
             options.telemetry_timeout_ms,
-            telemetry_store)) {
+            telemetry_store,
+            grid_map_tracker)) {
         std::cerr << "failed to open UDP telemetry receiver on port "
                   << options.telemetry_port << ": " << telemetry_thread.takeLastError() << "\n";
         video_thread.stop();
@@ -264,12 +269,17 @@ int VisionDebugApp::run(const VisionDebugOptions& options)
                 frame->timestamp_ms);
             std::vector<overlay::OverlayPrimitive> overlays;
             if (marker_frame) {
-                auto line_overlays = overlay::buildLineOverlays(marker_frame->line);
+                auto line_overlays = overlay::buildLineOverlays(
+                    marker_frame->line,
+                    marker_frame->width,
+                    marker_frame->height);
                 overlays.insert(overlays.end(), line_overlays.begin(), line_overlays.end());
                 auto intersection_overlays =
                     overlay::buildIntersectionOverlays(
                         marker_frame->intersection,
-                        marker_frame->intersection_decision);
+                        marker_frame->intersection_decision,
+                        marker_frame->width,
+                        marker_frame->height);
                 overlays.insert(
                     overlays.end(),
                     intersection_overlays.begin(),
@@ -317,7 +327,8 @@ int VisionDebugApp::run(const VisionDebugOptions& options)
             if (const auto latest = telemetry_store.latest()) {
                 auto text = telemetry::formatVisionLog(
                     *latest,
-                    telemetry_thread.stats());
+                    telemetry_thread.stats(),
+                    grid_map_tracker.render());
                 text += formatVideoStatsLine(
                     video_thread.stats(),
                     video_thread.overwrittenFrames(),

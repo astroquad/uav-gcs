@@ -53,6 +53,7 @@ add_library(gcs_core STATIC
     src/common/NetworkConfig.cpp
     src/network/UdpTelemetryReceiver.cpp
     src/protocol/TelemetryMessage.cpp
+    src/telemetry/GridMapTracker.cpp
 )
 
 target_include_directories(gcs_core PUBLIC

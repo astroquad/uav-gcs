@@ -68,9 +68,7 @@ std::string shortDirection(const std::string& direction)
 std::string typeLabel(const protocol::IntersectionTelemetry& intersection)
 {
     std::ostringstream stream;
-    stream << std::fixed << std::setprecision(2)
-           << "IX " << intersection.type
-           << " " << intersection.score;
+    stream << "IX " << intersection.type;
     if (intersection.held) {
         stream << " hold";
     } else if (!intersection.stable) {
@@ -151,19 +149,22 @@ void addArrowHead(
 } // namespace
 
 std::vector<OverlayPrimitive> buildIntersectionOverlays(
-    const protocol::IntersectionTelemetry& intersection)
+    const protocol::IntersectionTelemetry& intersection,
+    int frame_width,
+    int frame_height)
 {
-    return buildIntersectionOverlays(intersection, {});
+    return buildIntersectionOverlays(intersection, {}, frame_width, frame_height);
 }
 
 std::vector<OverlayPrimitive> buildIntersectionOverlays(
     const protocol::IntersectionTelemetry& intersection,
-    const protocol::IntersectionDecisionTelemetry& decision)
+    const protocol::IntersectionDecisionTelemetry& decision,
+    int frame_width,
+    int frame_height)
 {
     const Color cyan {0, 220, 255};
     const Color yellow {255, 220, 0};
     const Color white {255, 255, 255};
-    const Color green {80, 255, 140};
 
     std::vector<OverlayPrimitive> overlays;
     if (!intersection.valid) {
@@ -171,7 +172,12 @@ std::vector<OverlayPrimitive> buildIntersectionOverlays(
     }
 
     const Point2f center = toOverlayPoint(intersection.center_px);
-    overlays.reserve(6 + intersection.branches.size() * 4);
+    (void)frame_width;
+    if (frame_height > 0 && center.y > frame_height * 0.68) {
+        return overlays;
+    }
+
+    overlays.reserve(4 + intersection.branches.size() * 2);
     for (const auto& branch : intersection.branches) {
         if (!branch.present) {
             continue;
@@ -179,28 +185,16 @@ std::vector<OverlayPrimitive> buildIntersectionOverlays(
         const Point2f endpoint = toOverlayPoint(branch.endpoint_px);
         overlays.push_back(makeLine(center, endpoint, yellow, 2));
         addArrowHead(overlays, center, endpoint, yellow);
-        overlays.push_back(makeCircle(endpoint, 4.0, yellow, -1));
-        overlays.push_back(makeText(
-            {endpoint.x + 6.0, endpoint.y - 6.0},
-            branchLabel(branch),
-            yellow,
-            0.38));
     }
 
-    overlays.push_back(makeCircle(center, 7.0, cyan, -1));
-    overlays.push_back(makeCircle(center, 10.0, white, 1));
+    overlays.push_back(makeCircle(center, 6.0, cyan, -1));
+    overlays.push_back(makeCircle(center, 8.0, white, 1));
     overlays.push_back(makeText(
         {center.x + 10.0, center.y - 10.0},
         typeLabel(intersection),
         cyan,
-        0.5));
-    if (hasDecisionOverlay(decision)) {
-        overlays.push_back(makeText(
-            {center.x + 10.0, center.y + 18.0},
-            decisionLabel(decision),
-            green,
-            0.42));
-    }
+        0.42));
+    (void)decision;
     return overlays;
 }
 

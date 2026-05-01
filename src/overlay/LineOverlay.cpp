@@ -60,10 +60,13 @@ std::string lineLabel(const protocol::LineTelemetry& line)
 } // namespace
 
 std::vector<OverlayPrimitive> buildLineOverlays(
-    const protocol::LineTelemetry& line)
+    const protocol::LineTelemetry& line,
+    int frame_width,
+    int frame_height)
 {
     const Color magenta {255, 0, 255};
     const Color green {0, 255, 0};
+    const Color red {255, 0, 0};
     const Color white {255, 255, 255};
 
     std::vector<OverlayPrimitive> overlays;
@@ -80,13 +83,17 @@ std::vector<OverlayPrimitive> buildLineOverlays(
         }
     }
 
-    const Point2f tracking_point = toOverlayPoint(line.tracking_point_px);
-    overlays.push_back(makeCircle(tracking_point, 6.0, green, -1));
-    overlays.push_back(makeCircle(tracking_point, 8.0, white, 1));
-    overlays.push_back(makeText(
-        {tracking_point.x + 8.0, tracking_point.y - 8.0},
-        lineLabel(line),
-        green));
+    const double center_y = frame_height > 0
+        ? frame_height / 2.0
+        : line.tracking_point_px.y;
+    const double center_x = frame_width > 0
+        ? frame_width / 2.0
+        : line.tracking_point_px.x - line.center_offset_px;
+    const Point2f tracking_point {line.tracking_point_px.x, center_y};
+    const Point2f camera_center {center_x, center_y};
+    overlays.push_back(makeLine(camera_center, tracking_point, green, 4));
+    overlays.push_back(makeCircle(tracking_point, 12.0, red, -1));
+    overlays.push_back(makeCircle(tracking_point, 13.0, white, 1));
     return overlays;
 }
 

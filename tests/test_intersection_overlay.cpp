@@ -25,12 +25,13 @@ int main()
     decision.node.x = 2;
     decision.node.y = 1;
 
-    const auto overlays = gcs::overlay::buildIntersectionOverlays(intersection, decision);
-    assert(overlays.size() >= 8);
+    const auto overlays = gcs::overlay::buildIntersectionOverlays(intersection, decision, 640, 480);
+    assert(overlays.size() >= 4);
 
     bool saw_cyan_center = false;
     bool saw_yellow_branch = false;
-    bool saw_decision_label = false;
+    bool saw_compact_label = false;
+    bool saw_score_text = false;
     for (const auto& overlay : overlays) {
         if (overlay.type == gcs::overlay::OverlayPrimitive::Type::Circle &&
             overlay.circle.color.r == 0 &&
@@ -45,13 +46,18 @@ int main()
             saw_yellow_branch = true;
         }
         if (overlay.type == gcs::overlay::OverlayPrimitive::Type::Text &&
-            overlay.text.text.find("DEC T") != std::string::npos) {
-            saw_decision_label = true;
+            overlay.text.text.find("IX T") != std::string::npos) {
+            saw_compact_label = true;
+        }
+        if (overlay.type == gcs::overlay::OverlayPrimitive::Type::Text &&
+            overlay.text.text.find("0.92") != std::string::npos) {
+            saw_score_text = true;
         }
     }
 
     assert(saw_cyan_center);
     assert(saw_yellow_branch);
-    assert(saw_decision_label);
+    assert(saw_compact_label);
+    assert(!saw_score_text);
     return 0;
 }

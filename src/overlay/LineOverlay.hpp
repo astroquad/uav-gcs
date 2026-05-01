@@ -8,6 +8,8 @@
 namespace gcs::overlay {
 
 std::vector<OverlayPrimitive> buildLineOverlays(
-    const protocol::LineTelemetry& line);
+    const protocol::LineTelemetry& line,
+    int frame_width = 0,
+    int frame_height = 0);
 
 } // namespace gcs::overlay

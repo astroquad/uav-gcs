@@ -107,21 +107,25 @@ On Windows with Ninja:
 
 Start this before running `uav-onboard/build/vision_debug_node` on the
 Raspberry Pi. The onboard stream remains raw camera JPEG; marker boxes, labels,
-direction arrows, magenta line contours, green line tracking points, cyan
-intersection markers, and small decision/local-coordinate labels are drawn only
-by GCS.
+direction arrows, magenta line contours, red line-center points, green
+camera-center offset lines, cyan intersection markers, and local grid-map text
+are drawn only by GCS.
 
 Expected live overlay behavior:
 
 - ArUco markers: marker box, corner points, center point, direction arrow, label.
-- Line tracing: magenta connected line contour/border and green tracking point.
-  Cross-shaped intersections are shown when they are part of the selected
-  contour.
-- Intersection classification: cyan center/type label and yellow present branch
-  rays with branch scores.
-- Intersection decision: compact green `DEC ...` label showing accepted
-  topology, decision state, local grid coordinate when a node is recorded, and
-  `ZONE`/`OVR` hints when turn-zone or overshoot-risk telemetry is active.
+- Line tracing: magenta connected line contour/border, a red line-center point
+  fixed on the camera-center Y row, and a green horizontal offset line from the
+  camera center to that point. The overlay is intentionally minimal so later
+  control tuning can read lateral error clearly.
+- Intersection classification: compact cyan `IX <type>` label and yellow
+  present-branch rays only for intersections in the upper/current approach
+  region. Branch score text and full decision labels are kept out of the live
+  overlay by default.
+- Grid map: the vision log appends a live ASCII map from `GridMapTracker` when
+  `vision.grid_node` telemetry records new local grid coordinates. Visited
+  nodes, the current heading marker, and discovered edges update as the snake
+  path advances.
 - If both detectors are enabled, both overlays are shown in the same video
   window using the same frame sequence synchronization.
 - The separate vision log window shows packet stats, marker state, line state,
@@ -132,8 +136,9 @@ Expected live overlay behavior:
   focus/exposure settings, capture/processing FPS, optional Pi CPU temperature,
   raw-vs-filtered line state, raw/stabilized intersection state,
   `[intersection-decision]` branch evidence, and `[grid-node]` local coordinate
-  events. If the log window backend is unavailable, the same text is printed to
-  the terminal.
+  events, followed by `[grid-map]` ASCII output when grid nodes have been
+  observed. If the log window backend is unavailable, the same text is printed
+  to the terminal.
 
 The current protocol document is v1.7. `protocol_version` remains integer `1`
 for compatibility, while new fields live under `vision.intersection_decision`,
@@ -189,8 +194,9 @@ ctest --test-dir build-tests --output-on-failure
 
 Current focused tests cover telemetry parsing for `vision.line`,
 `vision.intersection`, `vision.intersection_decision`, and `vision.grid_node`;
-GCS line/intersection decision overlay primitive generation; and video
-reassembly stats so frame drop diagnostics do not regress silently.
+GCS line/intersection overlay primitive generation; live grid-map tracking from
+`vision.grid_node`; and video reassembly stats so frame drop diagnostics do not
+regress silently.
 
 ## Pi Bring-Up Order
 
@@ -202,11 +208,11 @@ reassembly stats so frame drop diagnostics do not regress silently.
    `./build/vision_debug_node --config config --line-only --line-mode light_on_dark --video`.
 4. Confirm this GCS prints `TELEMETRY` packets with increasing `seq` values.
 5. For grid-decision validation, confirm the vision log contains
-   `[intersection-decision]` and `[grid-node]` lines. `coord=(x,y)` is local
-   exploration origin only until official competition origin conversion is
-   implemented. During snake exploration, coordinates are advanced from the
-   current vehicle heading; the drone is assumed to yaw at turns and keep moving
-   forward in the camera frame.
+   `[intersection-decision]`, `[grid-node]`, and `[grid-map]` lines.
+   `coord=(x,y)` is local exploration origin only until official competition
+   origin conversion is implemented. During snake exploration, coordinates are
+   advanced from the current vehicle heading; the drone is assumed to yaw at
+   turns and keep moving forward in the camera frame.
 
 The onboard default sends telemetry to IPv4 broadcast `255.255.255.255`. When
 debug video is enabled with `--video`, the video destination is also discovered

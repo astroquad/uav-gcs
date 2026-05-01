@@ -26,4 +26,11 @@ if(TARGET gcs_video)
     target_include_directories(test_intersection_overlay PRIVATE ../src)
     target_link_libraries(test_intersection_overlay PRIVATE gcs_video gcs_core)
     add_test(NAME intersection_overlay COMMAND test_intersection_overlay)
+
+    add_executable(test_grid_map_tracker
+        test_grid_map_tracker.cpp
+    )
+    target_include_directories(test_grid_map_tracker PRIVATE ../src)
+    target_link_libraries(test_grid_map_tracker PRIVATE gcs_core)
+    add_test(NAME grid_map_tracker COMMAND test_grid_map_tracker)
 endif()

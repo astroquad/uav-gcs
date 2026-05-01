@@ -8,10 +8,14 @@
 namespace gcs::overlay {
 
 std::vector<OverlayPrimitive> buildIntersectionOverlays(
-    const protocol::IntersectionTelemetry& intersection);
+    const protocol::IntersectionTelemetry& intersection,
+    int frame_width = 0,
+    int frame_height = 0);
 
 std::vector<OverlayPrimitive> buildIntersectionOverlays(
     const protocol::IntersectionTelemetry& intersection,
-    const protocol::IntersectionDecisionTelemetry& decision);
+    const protocol::IntersectionDecisionTelemetry& decision,
+    int frame_width = 0,
+    int frame_height = 0);
 
 } // namespace gcs::overlay
