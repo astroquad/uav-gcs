@@ -87,6 +87,33 @@ std::string branchLabel(const protocol::BranchTelemetry& branch)
     return stream.str();
 }
 
+std::string decisionLabel(const protocol::IntersectionDecisionTelemetry& decision)
+{
+    std::ostringstream stream;
+    stream << std::fixed << std::setprecision(2)
+           << "DEC " << decision.accepted_type
+           << " " << decision.state;
+    if (decision.node.valid) {
+        stream << " (" << decision.node.x << ',' << decision.node.y << ')';
+    } else if (decision.turn_candidate) {
+        stream << " turn?";
+    }
+    if (decision.overshoot_risk) {
+        stream << " OVR";
+    } else if (decision.approach_phase == "turn_zone") {
+        stream << " ZONE";
+    }
+    return stream.str();
+}
+
+bool hasDecisionOverlay(const protocol::IntersectionDecisionTelemetry& decision)
+{
+    return decision.window_frames > 0 ||
+           decision.event_ready ||
+           decision.turn_candidate ||
+           decision.node.valid;
+}
+
 void addArrowHead(
     std::vector<OverlayPrimitive>& overlays,
     Point2f center,
@@ -126,9 +153,17 @@ void addArrowHead(
 std::vector<OverlayPrimitive> buildIntersectionOverlays(
     const protocol::IntersectionTelemetry& intersection)
 {
+    return buildIntersectionOverlays(intersection, {});
+}
+
+std::vector<OverlayPrimitive> buildIntersectionOverlays(
+    const protocol::IntersectionTelemetry& intersection,
+    const protocol::IntersectionDecisionTelemetry& decision)
+{
     const Color cyan {0, 220, 255};
     const Color yellow {255, 220, 0};
     const Color white {255, 255, 255};
+    const Color green {80, 255, 140};
 
     std::vector<OverlayPrimitive> overlays;
     if (!intersection.valid) {
@@ -159,6 +194,13 @@ std::vector<OverlayPrimitive> buildIntersectionOverlays(
         typeLabel(intersection),
         cyan,
         0.5));
+    if (hasDecisionOverlay(decision)) {
+        overlays.push_back(makeText(
+            {center.x + 10.0, center.y + 18.0},
+            decisionLabel(decision),
+            green,
+            0.42));
+    }
     return overlays;
 }
 

@@ -267,7 +267,9 @@ int VisionDebugApp::run(const VisionDebugOptions& options)
                 auto line_overlays = overlay::buildLineOverlays(marker_frame->line);
                 overlays.insert(overlays.end(), line_overlays.begin(), line_overlays.end());
                 auto intersection_overlays =
-                    overlay::buildIntersectionOverlays(marker_frame->intersection);
+                    overlay::buildIntersectionOverlays(
+                        marker_frame->intersection,
+                        marker_frame->intersection_decision);
                 overlays.insert(
                     overlays.end(),
                     intersection_overlays.begin(),

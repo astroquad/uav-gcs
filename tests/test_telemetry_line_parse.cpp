@@ -84,6 +84,53 @@ int main()
             { "direction": "right", "present": true, "score": 0.81, "endpoint_px": { "x": 720.0, "y": 360.0 }, "angle_deg": 0.0 }
           ]
         },
+        "intersection_decision": {
+          "state": "node_record",
+          "action": "continue",
+          "accepted_type": "T",
+          "best_observed_type": "T",
+          "event_ready": true,
+          "turn_candidate": false,
+          "required_turn": false,
+          "front_available": true,
+          "node_recorded": true,
+          "cooldown_active": false,
+          "accepted_branch_mask": 11,
+          "window_frames": 6,
+          "age_ms": 415,
+          "confidence": 0.82,
+          "center_px": { "x": 480.0, "y": 360.0 },
+          "center_y_norm": 0.5,
+          "approach_phase": "turn_zone",
+          "overshoot_risk": false,
+          "too_late_to_turn": false,
+          "branches": [
+            { "direction": "front", "present_frames": 2, "max_score": 0.92, "average_score": 0.84 },
+            { "direction": "right", "present_frames": 2, "max_score": 0.81, "average_score": 0.76 }
+          ],
+          "node": {
+            "valid": true,
+            "id": 3,
+            "local_coord": { "x": 2, "y": 1 },
+            "topology": "T",
+            "arrival_heading": "east",
+            "camera_branch_mask": 11,
+            "grid_branch_mask": 7,
+            "first_node": false,
+            "origin_local_only": true
+          }
+        },
+        "grid_node": {
+          "valid": true,
+          "id": 3,
+          "local_coord": { "x": 2, "y": 1 },
+          "topology": "T",
+          "arrival_heading": "east",
+          "camera_branch_mask": 11,
+          "grid_branch_mask": 7,
+          "first_node": false,
+          "origin_local_only": true
+        },
         "marker_detected": false,
         "marker_id": -1,
         "marker_count": 0,
@@ -96,6 +143,7 @@ int main()
         "aruco_latency_ms": 1.0,
         "line_latency_ms": 2.0,
         "intersection_latency_ms": 1.3,
+        "intersection_decision_latency_ms": 0.04,
         "telemetry_build_ms": 0.2,
         "telemetry_send_ms": 0.1,
         "video_submit_ms": 0.1,
@@ -148,8 +196,16 @@ int main()
     assert(parsed->vision.intersection.branches.size() == 2);
     assert(parsed->vision.intersection.branches[0].direction == "front");
     assert(parsed->vision.intersection.branches[0].endpoint_px.y == 180.0);
+    assert(parsed->vision.intersection_decision.state == "node_record");
+    assert(parsed->vision.intersection_decision.event_ready);
+    assert(parsed->vision.intersection_decision.accepted_branch_mask == 11);
+    assert(parsed->vision.intersection_decision.branches.size() == 2);
+    assert(parsed->vision.intersection_decision.node.valid);
+    assert(parsed->vision.intersection_decision.node.x == 2);
+    assert(parsed->vision.grid_node.grid_branch_mask == 7);
     assert(parsed->debug.line_latency_ms == 2.0);
     assert(parsed->debug.intersection_latency_ms == 1.3);
+    assert(parsed->debug.intersection_decision_latency_ms == 0.04);
     assert(parsed->debug.video_send_ms == 4.5);
     assert(parsed->debug.capture_fps == 11.8);
     assert(parsed->debug.processing_fps == 11.7);

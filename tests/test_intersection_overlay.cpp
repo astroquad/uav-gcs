@@ -1,6 +1,7 @@
 #include "overlay/IntersectionOverlay.hpp"
 
 #include <cassert>
+#include <string>
 
 int main()
 {
@@ -16,11 +17,20 @@ int main()
     intersection.branches.push_back({"right", true, 0.81, {480.0, 240.0}, 0.0});
     intersection.branches.push_back({"back", false, 0.12, {320.0, 360.0}, 90.0});
 
-    const auto overlays = gcs::overlay::buildIntersectionOverlays(intersection);
+    gcs::protocol::IntersectionDecisionTelemetry decision;
+    decision.state = "node_record";
+    decision.accepted_type = "T";
+    decision.window_frames = 6;
+    decision.node.valid = true;
+    decision.node.x = 2;
+    decision.node.y = 1;
+
+    const auto overlays = gcs::overlay::buildIntersectionOverlays(intersection, decision);
     assert(overlays.size() >= 8);
 
     bool saw_cyan_center = false;
     bool saw_yellow_branch = false;
+    bool saw_decision_label = false;
     for (const auto& overlay : overlays) {
         if (overlay.type == gcs::overlay::OverlayPrimitive::Type::Circle &&
             overlay.circle.color.r == 0 &&
@@ -34,9 +44,14 @@ int main()
             overlay.line.color.b == 0) {
             saw_yellow_branch = true;
         }
+        if (overlay.type == gcs::overlay::OverlayPrimitive::Type::Text &&
+            overlay.text.text.find("DEC T") != std::string::npos) {
+            saw_decision_label = true;
+        }
     }
 
     assert(saw_cyan_center);
     assert(saw_yellow_branch);
+    assert(saw_decision_label);
     return 0;
 }

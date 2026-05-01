@@ -34,6 +34,31 @@ Point2f pointOr(const nlohmann::json& object, Point2f fallback = {})
     return fallback;
 }
 
+GridNodeTelemetry gridNodeOr(const nlohmann::json& object, GridNodeTelemetry fallback = {})
+{
+    if (!object.is_object()) {
+        return fallback;
+    }
+    fallback.valid = valueOr<bool>(object, "valid", fallback.valid);
+    fallback.id = valueOr<std::uint32_t>(object, "id", fallback.id);
+    if (const auto coord = object.find("local_coord");
+        coord != object.end() && coord->is_object()) {
+        fallback.x = valueOr<int>(*coord, "x", fallback.x);
+        fallback.y = valueOr<int>(*coord, "y", fallback.y);
+    }
+    fallback.topology = valueOr<std::string>(object, "topology", fallback.topology);
+    fallback.arrival_heading =
+        valueOr<std::string>(object, "arrival_heading", fallback.arrival_heading);
+    fallback.camera_branch_mask =
+        valueOr<int>(object, "camera_branch_mask", fallback.camera_branch_mask);
+    fallback.grid_branch_mask =
+        valueOr<int>(object, "grid_branch_mask", fallback.grid_branch_mask);
+    fallback.first_node = valueOr<bool>(object, "first_node", fallback.first_node);
+    fallback.origin_local_only =
+        valueOr<bool>(object, "origin_local_only", fallback.origin_local_only);
+    return fallback;
+}
+
 } // namespace
 
 void TelemetryStats::observe(const TelemetryMessage& message)
@@ -265,6 +290,78 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
             message.vision.intersection_detected = message.vision.intersection.detected;
             message.vision.intersection_score = message.vision.intersection.score;
         }
+
+        if (const auto decision = vision->find("intersection_decision");
+            decision != vision->end() && decision->is_object()) {
+            message.vision.intersection_decision.state =
+                valueOr<std::string>(*decision, "state", message.vision.intersection_decision.state);
+            message.vision.intersection_decision.action =
+                valueOr<std::string>(*decision, "action", message.vision.intersection_decision.action);
+            message.vision.intersection_decision.accepted_type =
+                valueOr<std::string>(*decision, "accepted_type", message.vision.intersection_decision.accepted_type);
+            message.vision.intersection_decision.best_observed_type =
+                valueOr<std::string>(*decision, "best_observed_type", message.vision.intersection_decision.best_observed_type);
+            message.vision.intersection_decision.event_ready =
+                valueOr<bool>(*decision, "event_ready", message.vision.intersection_decision.event_ready);
+            message.vision.intersection_decision.turn_candidate =
+                valueOr<bool>(*decision, "turn_candidate", message.vision.intersection_decision.turn_candidate);
+            message.vision.intersection_decision.required_turn =
+                valueOr<bool>(*decision, "required_turn", message.vision.intersection_decision.required_turn);
+            message.vision.intersection_decision.front_available =
+                valueOr<bool>(*decision, "front_available", message.vision.intersection_decision.front_available);
+            message.vision.intersection_decision.node_recorded =
+                valueOr<bool>(*decision, "node_recorded", message.vision.intersection_decision.node_recorded);
+            message.vision.intersection_decision.cooldown_active =
+                valueOr<bool>(*decision, "cooldown_active", message.vision.intersection_decision.cooldown_active);
+            message.vision.intersection_decision.accepted_branch_mask =
+                valueOr<int>(*decision, "accepted_branch_mask", message.vision.intersection_decision.accepted_branch_mask);
+            message.vision.intersection_decision.window_frames =
+                valueOr<int>(*decision, "window_frames", message.vision.intersection_decision.window_frames);
+            message.vision.intersection_decision.age_ms =
+                valueOr<int>(*decision, "age_ms", message.vision.intersection_decision.age_ms);
+            message.vision.intersection_decision.confidence =
+                valueOr<double>(*decision, "confidence", message.vision.intersection_decision.confidence);
+            if (const auto center = decision->find("center_px");
+                center != decision->end()) {
+                message.vision.intersection_decision.center_px = pointOr(*center);
+            }
+            message.vision.intersection_decision.center_y_norm =
+                valueOr<double>(*decision, "center_y_norm", message.vision.intersection_decision.center_y_norm);
+            message.vision.intersection_decision.approach_phase =
+                valueOr<std::string>(*decision, "approach_phase", message.vision.intersection_decision.approach_phase);
+            message.vision.intersection_decision.overshoot_risk =
+                valueOr<bool>(*decision, "overshoot_risk", message.vision.intersection_decision.overshoot_risk);
+            message.vision.intersection_decision.too_late_to_turn =
+                valueOr<bool>(*decision, "too_late_to_turn", message.vision.intersection_decision.too_late_to_turn);
+            if (const auto branches = decision->find("branches");
+                branches != decision->end() && branches->is_array()) {
+                message.vision.intersection_decision.branches.clear();
+                for (const auto& branch_json : *branches) {
+                    if (!branch_json.is_object()) {
+                        continue;
+                    }
+                    BranchEvidenceTelemetry branch;
+                    branch.direction =
+                        valueOr<std::string>(branch_json, "direction", branch.direction);
+                    branch.present_frames =
+                        valueOr<int>(branch_json, "present_frames", branch.present_frames);
+                    branch.max_score =
+                        valueOr<double>(branch_json, "max_score", branch.max_score);
+                    branch.average_score =
+                        valueOr<double>(branch_json, "average_score", branch.average_score);
+                    message.vision.intersection_decision.branches.push_back(branch);
+                }
+            }
+            if (const auto node = decision->find("node");
+                node != decision->end()) {
+                message.vision.intersection_decision.node = gridNodeOr(*node);
+            }
+        }
+
+        if (const auto node = vision->find("grid_node");
+            node != vision->end()) {
+            message.vision.grid_node = gridNodeOr(*node);
+        }
         message.vision.marker_detected = valueOr<bool>(*vision, "marker_detected", message.vision.marker_detected);
         message.vision.marker_id = valueOr<int>(*vision, "marker_id", message.vision.marker_id);
         message.vision.marker_count = valueOr<int>(*vision, "marker_count", message.vision.marker_count);
@@ -326,6 +423,8 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
             valueOr<double>(*debug, "line_latency_ms", message.debug.line_latency_ms);
         message.debug.intersection_latency_ms =
             valueOr<double>(*debug, "intersection_latency_ms", message.debug.intersection_latency_ms);
+        message.debug.intersection_decision_latency_ms =
+            valueOr<double>(*debug, "intersection_decision_latency_ms", message.debug.intersection_decision_latency_ms);
         message.debug.telemetry_build_ms =
             valueOr<double>(*debug, "telemetry_build_ms", message.debug.telemetry_build_ms);
         message.debug.telemetry_send_ms =

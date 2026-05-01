@@ -107,8 +107,9 @@ On Windows with Ninja:
 
 Start this before running `uav-onboard/build/vision_debug_node` on the
 Raspberry Pi. The onboard stream remains raw camera JPEG; marker boxes, labels,
-direction arrows, magenta line contours, and green line tracking points are
-drawn only by GCS.
+direction arrows, magenta line contours, green line tracking points, cyan
+intersection markers, and small decision/local-coordinate labels are drawn only
+by GCS.
 
 Expected live overlay behavior:
 
@@ -116,16 +117,27 @@ Expected live overlay behavior:
 - Line tracing: magenta connected line contour/border and green tracking point.
   Cross-shaped intersections are shown when they are part of the selected
   contour.
+- Intersection classification: cyan center/type label and yellow present branch
+  rays with branch scores.
+- Intersection decision: compact green `DEC ...` label showing accepted
+  topology, decision state, local grid coordinate when a node is recorded, and
+  `ZONE`/`OVR` hints when turn-zone or overshoot-risk telemetry is active.
 - If both detectors are enabled, both overlays are shown in the same video
   window using the same frame sequence synchronization.
 - The separate vision log window shows packet stats, marker state, line state,
-  detector latency, onboard read/decode/JSON/send/video timing, line contour
-  workload counters, video queue drops/skips/failures, video chunk counts, GCS
-  completed/incomplete frame counts, displayed FPS, Pi board/OS/load/memory/
-  throttling/Wi-Fi state, IMX519 camera focus/exposure settings, capture/
-  processing FPS, optional Pi CPU temperature, and raw-vs-filtered line state.
-  If the log window backend is unavailable, the same text is printed to the
-  terminal.
+  detector latency, intersection decision latency, onboard read/decode/JSON/
+  send/video timing, line contour workload counters, video queue drops/skips/
+  failures, video chunk counts, GCS completed/incomplete frame counts,
+  displayed FPS, Pi board/OS/load/memory/throttling/Wi-Fi state, IMX519 camera
+  focus/exposure settings, capture/processing FPS, optional Pi CPU temperature,
+  raw-vs-filtered line state, raw/stabilized intersection state,
+  `[intersection-decision]` branch evidence, and `[grid-node]` local coordinate
+  events. If the log window backend is unavailable, the same text is printed to
+  the terminal.
+
+The current protocol document is v1.7. `protocol_version` remains integer `1`
+for compatibility, while new fields live under `vision.intersection_decision`,
+`vision.grid_node`, and `debug.intersection_decision_latency_ms`.
 
 Raspberry Pi 4 + IMX519-78 can produce larger MJPEG frames than the previous
 Zero-class camera setup. GCS still treats video as best-effort debug data:
@@ -175,9 +187,10 @@ cmake --build build-tests
 ctest --test-dir build-tests --output-on-failure
 ```
 
-Current focused tests cover telemetry parsing for `vision.line` and GCS line
-overlay primitive generation. Video reassembly stats are also covered so frame
-drop diagnostics do not regress silently.
+Current focused tests cover telemetry parsing for `vision.line`,
+`vision.intersection`, `vision.intersection_decision`, and `vision.grid_node`;
+GCS line/intersection decision overlay primitive generation; and video
+reassembly stats so frame drop diagnostics do not regress silently.
 
 ## Pi Bring-Up Order
 
@@ -188,6 +201,12 @@ drop diagnostics do not regress silently.
    `--video` on the Pi:
    `./build/vision_debug_node --config config --line-only --line-mode light_on_dark --video`.
 4. Confirm this GCS prints `TELEMETRY` packets with increasing `seq` values.
+5. For grid-decision validation, confirm the vision log contains
+   `[intersection-decision]` and `[grid-node]` lines. `coord=(x,y)` is local
+   exploration origin only until official competition origin conversion is
+   implemented. During snake exploration, coordinates are advanced from the
+   current vehicle heading; the drone is assumed to yaw at turns and keep moving
+   forward in the camera frame.
 
 The onboard default sends telemetry to IPv4 broadcast `255.255.255.255`. When
 debug video is enabled with `--video`, the video destination is also discovered

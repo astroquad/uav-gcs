@@ -24,6 +24,7 @@ struct VisionFrame {
     double aruco_latency_ms = 0.0;
     double line_latency_ms = 0.0;
     double intersection_latency_ms = 0.0;
+    double intersection_decision_latency_ms = 0.0;
     double telemetry_build_ms = 0.0;
     double telemetry_send_ms = 0.0;
     double video_submit_ms = 0.0;
@@ -49,6 +50,8 @@ struct VisionFrame {
     std::vector<protocol::MarkerTelemetry> markers;
     protocol::LineTelemetry line;
     protocol::IntersectionTelemetry intersection;
+    protocol::IntersectionDecisionTelemetry intersection_decision;
+    protocol::GridNodeTelemetry grid_node;
 };
 
 using MarkerFrame = VisionFrame;

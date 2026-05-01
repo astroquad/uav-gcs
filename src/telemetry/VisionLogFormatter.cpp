@@ -23,6 +23,22 @@ std::string branchSummary(const protocol::IntersectionTelemetry& intersection)
     return stream.str();
 }
 
+std::string decisionBranchSummary(const protocol::IntersectionDecisionTelemetry& decision)
+{
+    std::ostringstream stream;
+    for (std::size_t index = 0; index < decision.branches.size(); ++index) {
+        if (index > 0) {
+            stream << ' ';
+        }
+        const auto& branch = decision.branches[index];
+        const char label = branch.direction.empty()
+            ? '?'
+            : static_cast<char>(std::toupper(static_cast<unsigned char>(branch.direction.front())));
+        stream << label << ':' << branch.present_frames << '/' << branch.max_score;
+    }
+    return stream.str();
+}
+
 } // namespace
 
 std::string formatVisionLog(
@@ -38,6 +54,7 @@ std::string formatVisionLog(
            << " aruco=" << frame.aruco_latency_ms << "ms"
            << " line=" << frame.line_latency_ms << "ms"
            << " ix=" << frame.intersection_latency_ms << "ms"
+           << " dec=" << frame.intersection_decision_latency_ms << "ms"
            << " json=" << frame.telemetry_build_ms << "ms"
            << " tsend=" << frame.telemetry_send_ms << "ms"
            << " vsubmit=" << frame.video_submit_ms << "ms"
@@ -120,6 +137,36 @@ std::string formatVisionLog(
            << " mask=" << frame.intersection.branch_mask
            << " count=" << frame.intersection.branch_count
            << " stable_frames=" << frame.intersection.stable_frames << "\n";
+
+    stream << "[intersection-decision] state=" << frame.intersection_decision.state
+           << " action=" << frame.intersection_decision.action
+           << " accepted=" << frame.intersection_decision.accepted_type
+           << " best=" << frame.intersection_decision.best_observed_type
+           << " event=" << (frame.intersection_decision.event_ready ? "node" : "no")
+           << " turn=" << (frame.intersection_decision.turn_candidate ? "yes" : "no")
+           << " required_turn=" << (frame.intersection_decision.required_turn ? "yes" : "no")
+           << " front=" << (frame.intersection_decision.front_available ? "yes" : "no")
+           << " conf=" << frame.intersection_decision.confidence
+           << " y=" << frame.intersection_decision.center_y_norm
+           << " phase=" << frame.intersection_decision.approach_phase
+           << " overshoot=" << (frame.intersection_decision.overshoot_risk ? "yes" : "no")
+           << " window=" << frame.intersection_decision.window_frames
+           << " mask=" << frame.intersection_decision.accepted_branch_mask
+           << " branches=" << decisionBranchSummary(frame.intersection_decision) << "\n";
+
+    if (frame.grid_node.valid) {
+        stream << "[grid-node] id=" << frame.grid_node.id
+               << " coord=(" << frame.grid_node.x << ',' << frame.grid_node.y << ")"
+               << " topology=" << frame.grid_node.topology
+               << " heading=" << frame.grid_node.arrival_heading
+               << " camera_mask=" << frame.grid_node.camera_branch_mask
+               << " grid_mask=" << frame.grid_node.grid_branch_mask
+               << " first=" << (frame.grid_node.first_node ? "yes" : "no")
+               << " origin=" << (frame.grid_node.origin_local_only ? "local" : "official")
+               << "\n";
+    } else {
+        stream << "[grid-node] none\n";
+    }
 
     stream << "[markers] count=" << frame.markers.size() << "\n";
     if (frame.markers.empty()) {
