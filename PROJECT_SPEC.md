@@ -3,7 +3,7 @@
 > 제24회 한국로봇항공기경연대회 중급부문 멀티콥터형 드론 실내 조난자 탐색 GCS 소프트웨어 기준 문서  
 > **이 문서는 팀원과 코딩 에이전트가 공통으로 참조하는 Single Source of Truth입니다.**
 
-최종 수정: 2026-04-29
+최종 수정: 2026-05-13
 
 ---
 
@@ -11,7 +11,18 @@
 
 노트북에서 실행되는 C++ 기반 지상 관제 프로그램(GCS)을 개발한다. GCS는 드론의 자율 미션 상태를 실시간으로 시각화하고, 운용자가 고수준 명령을 보낼 수 있는 인터페이스를 제공한다.
 
-현재 레포는 최종 GCS UI 전체 중 **telemetry receiver, raw debug video receiver, GCS-side ArUco/line overlay, vision log window** 단계까지 구현되어 있다. Mission control panel, grid map UI, command sender, persistent log subsystem은 목표 아키텍처로 유지하되 아직 구현 전이다.
+현재 레포는 최종 GCS UI 전체 중 **telemetry receiver, raw debug video receiver, GCS-side ArUco/line/intersection overlay, vision log window, local grid-map log display** 단계까지 구현되어 있다. Mission control panel, command sender, drone state dashboard, persistent log subsystem은 목표 아키텍처로 유지하되 아직 구현 전이다.
+
+최종 운용 실행 파일은 Windows 기본 generator 기준 `.\build\Release\uav_gcs.exe`, Ninja 기준 `.\build\uav_gcs.exe`다. 현재 `uav_gcs`는 basic telemetry receiver에 가깝지만, 최종적으로는 mission dashboard, command sender, telemetry/video/logging, safety status를 조립하는 GCS composition root가 되어야 한다. `uav_gcs_vision_debug`는 계속 비전 관제/튜닝용 debug 실행 파일로 유지한다.
+
+72시간 실기체 MVP에서 GCS의 역할은 command UI가 아니라 관제와 기록이다. `uav_gcs_vision_debug`로 line offset, video, telemetry, Pixhawk/onboard state, safety event를 확인하고, mission start/abort/land는 우선 onboard CLI/config, RC takeover, Pixhawk mode/land 절차로 처리한다.
+
+문서 계층:
+
+- 전체 시스템 공통 기준은 `development-log/SYSTEM_SPEC.md`를 따른다.
+- 72시간/1주일 MVP 계획은 `development-log/MVP_PLAN.md`를 따른다.
+- 이 문서는 `uav-gcs` repo의 책임, 모듈, 실행 파일, 빌드/테스트 기준만 상세히 다룬다.
+- `development-log/RESEARCH.md`와 `development-log/PLAN.md`는 매 스텝마다 바뀌는 작업용 scratchpad다.
 
 ---
 
@@ -19,7 +30,7 @@
 
 | 구분 | 내용 |
 |---|---|
-| 담당 | Onboard telemetry 수신/파싱/표시, raw debug video 수신/표시, GCS-side marker/line overlay, vision debug log, GCS discovery beacon, 추후 mission UI/command/log/grid map |
+| 담당 | Onboard telemetry 수신/파싱/표시, raw debug video 수신/표시, GCS-side marker/line/intersection overlay, vision debug log, GCS discovery beacon, mission UI/command/log/grid map |
 | 미담당 | 자율주행 판단은 `uav-onboard` 담당, 저수준 비행 제어는 ArduPilot/Pixhawk 담당, onboard vision detection은 `uav-onboard` 담당 |
 
 중요한 역할 분리:
@@ -39,7 +50,7 @@ Windows/Linux laptop
        ├─ UDP telemetry receiver
        ├─ UDP MJPEG debug video receiver
        ├─ GCS-side overlay/log window
-       └─ future command UI
+       └─ final uav_gcs composition root
 
 Wi-Fi
   ├─ telemetry UDP 14550: onboard -> GCS
@@ -50,7 +61,7 @@ Wi-Fi
 Raspberry Pi 4 + IMX519-78
   └─ uav-onboard
        ├─ camera / vision / telemetry
-       └─ future mission / MAVLink / safety
+       └─ mission / MAVLink / safety
 
 UART MAVLink, planned
   └─ Pixhawk / ArduPilot
@@ -64,7 +75,7 @@ UART MAVLink, planned
 |---|---|---|
 | Basic telemetry receiver | 구현됨 | `src/main.cpp`, `src/network/UdpTelemetryReceiver.*` |
 | Network config parsing | 구현됨 | `src/common/NetworkConfig.*` |
-| Telemetry v1.5 JSON parser | 구현됨 | `src/protocol/TelemetryMessage.*` |
+| Telemetry v1.7 JSON parser | 구현됨 | `src/protocol/TelemetryMessage.*` |
 | Telemetry stats | 구현됨 | `src/protocol/TelemetryMessage.*` |
 | Video-only viewer | 구현됨 | `src/video_main.cpp`, `src/app/VideoViewerApp.*` |
 | Vision debug receiver | 구현됨 | `src/vision_debug_main.cpp`, `src/app/VisionDebugApp.*` |
@@ -72,11 +83,13 @@ UART MAVLink, planned
 | GCS discovery beacon | 구현됨 | `src/video/GcsDiscoveryBeacon.*` |
 | GCS-side line overlay | 구현됨 | `src/overlay/LineOverlay.*` |
 | GCS-side marker overlay | 구현됨 | `src/overlay/MarkerOverlay.*` |
+| GCS-side intersection overlay | 구현됨 | `src/overlay/IntersectionOverlay.*` |
 | OpenCV video window backend | 구현됨 | `src/ui/VideoWindow.cpp` |
 | Win32/WIC fallback video backend | 구현됨 | `src/ui/VideoWindowWin32.cpp` |
 | Vision log window/stdout fallback | 구현됨 | `src/ui/VisionLogWindow.*` |
 | Frame/telemetry matching store | 구현됨 | `src/telemetry/TelemetryStore.*` |
 | Vision/marker log formatting | 구현됨 | `src/telemetry/*Formatter.*` |
+| Local grid-map log tracker | 구현됨 | `src/telemetry/GridMapTracker.*` |
 | Mission control command sender | 미구현 | planned |
 | Grid map/mission state UI | 미구현 | `src/state/.gitkeep`, future UI |
 | Persistent log subsystem | 미구현 | `src/logging/.gitkeep` |
@@ -106,9 +119,26 @@ UART MAVLink, planned
 | Mission state | IDLE/TAKEOFF/GRID_EXPLORE 등 onboard mission state 표시 |
 | Grid map | 현재 격자 좌표, 방문 여부, marker 위치 표시 |
 | Command | START/ABORT/EMERGENCY LAND/marker count command 송신 |
+| Control backend selection | GUIDED velocity primary, RC override fallback 선택/상태 표시 |
 | Drone state | battery, altitude, armed, flight mode, failsafe 표시 |
 | Safety events | line lost, GCS lost, low voltage, Pixhawk heartbeat lost 경보 |
 | Logging | telemetry/event/command log 저장 및 replay |
+
+### 5.3 Near-Term MVP GCS Scope
+
+3일 MVP에서 GCS는 다음만 필수로 한다.
+
+- `uav_gcs_vision_debug`로 raw camera, overlay, line offset, telemetry log 확인.
+- Pixhawk/onboard state가 telemetry로 들어오면 mode, armed, altitude/range, heartbeat health를 표시.
+- line lost, heartbeat lost, landing reason 같은 safety event를 로그로 확인.
+
+3일 MVP에서 미루는 것:
+
+- full command sender UI
+- marker count command
+- backend switching UI
+- command ACK/retry UI
+- full dashboard framework 결정
 
 ---
 
@@ -118,7 +148,7 @@ UART MAVLink, planned
 
 현재 구현은 빠른 vision bring-up을 위한 경량 UI다.
 
-- `uav_gcs`: console telemetry receiver
+- `uav_gcs`: 현재 console telemetry receiver, 최종 mission dashboard composition root
 - `uav_gcs_video`: camera window only
 - `uav_gcs_vision_debug`: camera window + vision log window
 - Windows에서 OpenCV가 없어도 Win32/WIC backend로 JPEG decode와 drawing 가능
@@ -146,7 +176,7 @@ UART MAVLink, planned
 [Vision Debug]    [Event/Command Log]
 ```
 
-Dear ImGui + OpenCV/texture 기반 UI는 여전히 장기 후보지만, 현재 코드에는 Dear ImGui가 포함되어 있지 않다. 현 단계에서는 vision debug window를 안정화하고, mission/control 기능이 생긴 뒤 full dashboard로 확장한다.
+Dear ImGui + OpenCV/texture 기반 UI는 여전히 장기 후보지만, 현재 코드에는 Dear ImGui가 포함되어 있지 않다. 현 단계에서는 `uav_gcs_vision_debug`를 안정적인 debug composition으로 유지하고, 최종 `uav_gcs`가 mission control, command sender, drone state, event log를 조립하도록 확장한다. Debug app 코드를 main에 복사하지 않고 공통 telemetry/video/protocol/overlay/logging 모듈을 공유한다.
 
 ---
 
@@ -157,7 +187,7 @@ Dear ImGui + OpenCV/texture 기반 UI는 여전히 장기 후보지만, 현재 �
 - `uav-onboard/docs/PROTOCOL.md`
 - `uav-gcs/docs/PROTOCOL.md`
 
-현재 version은 v1.5이며 JSON top-level `protocol_version`은 integer `1`이다.
+현재 문서 version은 v1.7이며 JSON top-level `protocol_version`은 호환성을 위해 integer `1`이다.
 
 | Channel | Direction | Transport | Port | Status |
 |---|---|---|---:|---|
@@ -289,7 +319,7 @@ Apps:
 
 | 파일 | 역할 |
 |---|---|
-| `src/main.cpp` | `uav_gcs` basic telemetry receiver |
+| `src/main.cpp` | 현재 `uav_gcs` basic telemetry receiver; 최종 GCS runtime composition root로 확장 예정 |
 | `src/video_main.cpp` | `uav_gcs_video` CLI entry |
 | `src/vision_debug_main.cpp` | `uav_gcs_vision_debug` CLI entry |
 | `src/app/VideoViewerApp.*` | video-only app orchestration |
@@ -314,7 +344,7 @@ Tests/tools:
 
 | 파일 | 역할 |
 |---|---|
-| `tests/test_telemetry_line_parse.cpp` | v1.5 line/debug telemetry parse regression |
+| `tests/test_telemetry_line_parse.cpp` | v1.7 line/intersection/grid-node telemetry parse regression |
 | `tests/test_video_reassembler.cpp` | video chunk reassembly/drop stats regression |
 | `tests/test_line_overlay.cpp` | line overlay primitive regression |
 | `tools/mock_onboard.cpp` | basic telemetry mock sender |
@@ -412,6 +442,12 @@ Windows Ninja run:
 .\build\uav_gcs_vision_debug.exe --config config
 ```
 
+Windows Visual Studio generator 최종 GCS runtime 목표:
+
+```powershell
+.\build\Release\uav_gcs.exe --config config
+```
+
 Vision debug normal flow:
 
 ```powershell
@@ -453,7 +489,7 @@ ctest --test-dir build-tests --output-on-failure
 
 ## 12. Safety and Command Requirements
 
-Command channel is planned, not implemented. Target command messages:
+Command channel is planned, not implemented. Target final command messages:
 
 | Command | 설명 |
 |---|---|
@@ -462,6 +498,12 @@ Command channel is planned, not implemented. Target command messages:
 | `emergency_land` | immediate landing |
 | `set_marker_count` | expected marker count 설정 |
 | `request_status` | immediate status request |
+| `set_control_backend` | onboard control backend를 GUIDED velocity primary 또는 RC override fallback 중 선택 |
+
+For the 72-hour line-follow MVP, these commands are not mandatory. GCS should
+prioritize observation, logging, and clear safety status. Start/abort/land can
+be handled by onboard CLI/config, RC takeover, and Pixhawk mode/land procedures
+until the command channel is ready.
 
 UI requirements when implemented:
 
@@ -476,16 +518,16 @@ UI requirements when implemented:
 
 | 순서 | 작업 | 이유/검증 |
 |---:|---|---|
-| 1 | 현재 vision debug receiver 안정화 유지 | line/ArUco tuning의 기본 관제 도구 |
-| 2 | Telemetry raw log 저장 | 비행/테스트 재현성 확보 |
-| 3 | Mission/drone state model 추가 | full dashboard의 데이터 중심 |
-| 4 | Command sender TCP channel 구현 | START/ABORT/EMERGENCY LAND |
+| 1 | `uav_gcs_vision_debug` 안정화 유지 | line/ArUco/intersection tuning의 기본 관제 도구 |
+| 2 | `uav_gcs`를 최종 GCS composition root로 확장 | 최종 실행 타깃을 `uav_gcs`로 수렴 |
+| 3 | Mission/drone state model 추가 | dashboard와 command ACK의 데이터 중심 |
+| 4 | Command sender channel 구현 | START/ABORT/EMERGENCY LAND/backend 선택 |
 | 5 | Mission control panel 추가 | 운용 UI 시작점 |
 | 6 | Grid/marker map panel 추가 | 대회 미션 관제 핵심 |
 | 7 | Event/command log panel 추가 | safety/command 추적 |
-| 8 | Full dashboard framework 결정 | Dear ImGui/Qt/기존 Win32 확장 중 선택 |
-| 9 | Log replay tool 구현 | 보고서/디버깅 재현 |
-| 10 | Onboard mission/MAVLink와 통합 테스트 | 실제 mission loop 검증 |
+| 8 | Telemetry raw log 저장과 replay 도구 확장 | 비행/테스트 재현성 확보 |
+| 9 | Full dashboard framework 결정 | Dear ImGui/Qt/기존 Win32 확장 중 선택 |
+| 10 | Onboard mission/MAVLink와 SITL/bench 통합 테스트 | 실제 mission loop 검증 |
 
 ---
 
@@ -494,7 +536,7 @@ UI requirements when implemented:
 | 항목 | 방향 |
 |---|---|
 | Protocol 최적화 | JSON 부하가 커지면 MessagePack/FlatBuffers 검토 |
-| Full dashboard | 현재 debug window에서 mission dashboard로 확장 |
+| Full dashboard | 최종 `uav_gcs` composition root에서 mission dashboard로 확장 |
 | Multi-run replay | telemetry/video log 기반 test replay |
 | 다중 드론 | drone_id 기반 state map으로 확장 |
 | Web viewer | GCS protocol layer를 WebSocket bridge로 래핑 |

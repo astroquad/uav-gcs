@@ -17,6 +17,32 @@ video display, and GCS-side logging.
 - `third_party/`: vendored dependencies when needed
 - `logs/`: runtime logs
 
+## Executable Roles
+
+The GCS codebase should keep debug viewers and the final operator program
+separate while sharing protocol, telemetry, video, overlay, and logging modules.
+
+Current executables:
+
+- `uav_gcs`: current basic telemetry receiver. This is the final GCS
+  composition root target and should eventually assemble mission dashboard,
+  command sender, telemetry/video/logging, drone state, and safety status.
+- `uav_gcs_vision_debug`: vision bring-up/debug program. It receives telemetry
+  and optional raw camera video, draws GCS-side overlays, and shows the vision
+  log. It should remain the primary vision tuning tool.
+- `uav_gcs_video`: raw MJPEG video receiver only.
+- `mock_onboard`, `log_replayer`: development tools.
+
+Code reuse rule:
+
+- Do not copy `VisionDebugApp` into `uav_gcs` main.
+- Shared receivers, protocol parsers, overlay builders, grid-map trackers, and
+  log formatters should stay in libraries that both `uav_gcs` and
+  `uav_gcs_vision_debug` can link.
+- For the 3-day flight MVP, GCS command UI is not required. GCS should focus on
+  observing telemetry/video/logs while RC/Pixhawk procedures and onboard config
+  handle start/abort/landing.
+
 ## Build
 
 ```bash
