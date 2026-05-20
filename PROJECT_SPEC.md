@@ -3,7 +3,7 @@
 > 제24회 한국로봇항공기경연대회 중급부문 멀티콥터형 드론 실내 조난자 탐색 GCS 소프트웨어 기준 문서  
 > **이 문서는 팀원과 코딩 에이전트가 공통으로 참조하는 Single Source of Truth입니다.**
 
-최종 수정: 2026-05-13
+최종 수정: 2026-05-15
 
 ---
 
@@ -16,6 +16,8 @@
 최종 운용 실행 파일은 Windows 기본 generator 기준 `.\build\Release\uav_gcs.exe`, Ninja 기준 `.\build\uav_gcs.exe`다. 현재 `uav_gcs`는 basic telemetry receiver에 가깝지만, 최종적으로는 mission dashboard, command sender, telemetry/video/logging, safety status를 조립하는 GCS composition root가 되어야 한다. `uav_gcs_vision_debug`는 계속 비전 관제/튜닝용 debug 실행 파일로 유지한다.
 
 72시간 실기체 MVP에서 GCS의 역할은 command UI가 아니라 관제와 기록이다. `uav_gcs_vision_debug`로 line offset, video, telemetry, Pixhawk/onboard state, safety event를 확인하고, mission start/abort/land는 우선 onboard CLI/config, RC takeover, Pixhawk mode/land 절차로 처리한다.
+
+Gazebo/SITL 반복 테스트에서도 GCS의 역할은 동일하다. Windows에서 `uav_gcs_vision_debug.exe --config config`를 먼저 실행하고, WSL onboard의 `vision_debug_node --target sitl --vision gazebo --video` 또는 `line_follow_node --target sitl --vision gazebo --video`가 보내는 Gazebo 하향 camera와 onboard vision telemetry를 수신해 overlay/log로 확인한다.
 
 문서 계층:
 
@@ -466,9 +468,9 @@ Vision debug normal flow:
 Tests:
 
 ```powershell
-cmake -S . -B build-tests -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
-cmake --build build-tests
-ctest --test-dir build-tests --output-on-failure
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build --output-on-failure
 ```
 
 ---

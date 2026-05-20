@@ -213,9 +213,9 @@ On Windows PowerShell with the default Visual Studio CMake generator:
 Configure with tests enabled:
 
 ```powershell
-cmake -S . -B build-tests -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
-cmake --build build-tests
-ctest --test-dir build-tests --output-on-failure
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build --output-on-failure
 ```
 
 Current focused tests cover telemetry parsing for `vision.line`,

@@ -84,6 +84,16 @@ struct GridNodeTelemetry {
     bool origin_local_only = true;
 };
 
+// Cycle 13: fractional drone position relative to the last committed grid
+// node, used by GridMapTracker to render the heading arrow at a sub-cell
+// position so the operator can see progress along the line in real time.
+struct DronePositionTelemetry {
+    bool   valid = false;
+    double cell_progress = 0.0;
+    double grid_offset_x = 0.0;
+    double grid_offset_y = 0.0;
+};
+
 struct IntersectionDecisionTelemetry {
     std::string state = "cruise";
     std::string action = "continue";
@@ -136,6 +146,8 @@ struct VisionTelemetry {
     IntersectionTelemetry intersection;
     IntersectionDecisionTelemetry intersection_decision;
     GridNodeTelemetry grid_node;
+    // Cycle 13: drone fractional position from last committed node.
+    DronePositionTelemetry drone_position;
     bool marker_detected = false;
     int marker_id = -1;
     int marker_count = 0;

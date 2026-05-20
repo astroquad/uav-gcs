@@ -28,6 +28,9 @@ struct GridMapCoordLess {
 class GridMapTracker {
 public:
     bool observe(const protocol::GridNodeTelemetry& node);
+    // Cycle 13: update the drone fractional position used by render() to draw
+    // the heading arrow at a sub-cell location between commits.
+    void observeDronePosition(bool valid, double grid_offset_x, double grid_offset_y);
     std::string render() const;
     void reset();
 
@@ -61,6 +64,10 @@ private:
     bool has_current_ = false;
     bool has_first_ = false;
     std::uint32_t next_order_ = 1;
+    // Cycle 13: drone fractional position from the last committed node.
+    bool   has_drone_pos_ = false;
+    double drone_offset_x_ = 0.0;
+    double drone_offset_y_ = 0.0;
     mutable std::mutex mutex_;
 };
 

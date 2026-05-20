@@ -1,6 +1,7 @@
 #include "telemetry/GridMapTracker.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <sstream>
 #include <vector>
@@ -26,6 +27,10 @@ GridMapCoord normalizedEdgeEnd(GridMapCoord a, GridMapCoord b)
 
 GridMapCoord headingVector(const std::string& heading)
 {
+    // Cycle 13: reverted to screen convention — north = -y, south = +y.
+    // First grid node is (0,0), subsequent nodes (0,-1), (0,-2)... up the
+    // column; vertiport sits at (0,+1). canvasRow uses (y - min_y) * 2 so a
+    // smaller y still renders at the top of the canvas (north is visual up).
     if (heading == "north") {
         return {0, -1};
     }
@@ -38,7 +43,7 @@ GridMapCoord headingVector(const std::string& heading)
     if (heading == "west") {
         return {-1, 0};
     }
-    return {0, 1};
+    return {0, -1};
 }
 
 void put(std::vector<std::string>& canvas, int row, int col, char value)
@@ -80,6 +85,16 @@ bool GridMapTracker::observe(const protocol::GridNodeTelemetry& node)
     }
 
     const GridMapCoord coord = coordFor(node);
+    // Cycle 19: coord-based dedup safety net. If a different node ID arrives
+    // at the same (x,y) (rare onboard race) keep the first entry rather than
+    // overwriting — otherwise the visual grid grows phantom cells while the
+    // old node disappears.
+    auto coord_it = nodes_.find(coord);
+    if (coord_it != nodes_.end() && node.id != 0 &&
+        coord_it->second.telemetry.id != 0 &&
+        coord_it->second.telemetry.id != node.id) {
+        return false;
+    }
     if (has_current_ &&
         (std::abs(coord.x - current_coord_.x) + std::abs(coord.y - current_coord_.y) == 1)) {
         edges_.insert({current_coord_, coord});
@@ -121,18 +136,17 @@ std::string GridMapTracker::render() const
         max_coord.y = std::max(max_coord.y, coord.y);
     }
 
-    const GridMapCoord start_coord = has_first_ ? startCoordFor(first_node_) : GridMapCoord {0, 1};
-    min_coord.x = std::min(min_coord.x, start_coord.x);
-    min_coord.y = std::min(min_coord.y, start_coord.y);
-    max_coord.x = std::max(max_coord.x, start_coord.x);
-    max_coord.y = std::max(max_coord.y, start_coord.y);
-
+    // Cycle 16: start coord ('s') was removed — the new arena has no
+    // vertiport->grid entry line, so the (0,0) grid origin is the very first
+    // node rendered. Canvas extent is taken straight from the node set.
     const int rows = (max_coord.y - min_coord.y) * 2 + 1;
     const int cols = (max_coord.x - min_coord.x) * 4 + 1;
     std::vector<std::string> canvas(
         static_cast<std::size_t>(std::max(1, rows)),
         std::string(static_cast<std::size_t>(std::max(1, cols)), ' '));
 
+    // Cycle 13 revert: north = -y. Smaller y must render at the TOP of the
+    // canvas so the visualization still reads "north is up".
     const auto canvasRow = [&](int y) {
         return (y - min_coord.y) * 2;
     };
@@ -166,6 +180,7 @@ std::string GridMapTracker::render() const
     for (const auto& [coord, node] : nodes_) {
         (void)node;
         const GridMapCoord east {coord.x + 1, coord.y};
+        // Cycle 13 revert: north = -y, so the south neighbor sits at y + 1.
         const GridMapCoord south {coord.x, coord.y + 1};
         if (nodes_.find(east) != nodes_.end()) {
             drawEdge(coord, east);
@@ -175,37 +190,21 @@ std::string GridMapTracker::render() const
         }
     }
 
-    if (has_first_) {
-        const int first_row = canvasRow(first_coord_.y);
-        const int first_col = canvasCol(first_coord_.x);
-        const int start_row = canvasRow(start_coord.y);
-        const int start_col = canvasCol(start_coord.x);
-        if (first_row == start_row) {
-            const int start = std::min(first_col, start_col);
-            const int end = std::max(first_col, start_col);
-            for (int col = start + 1; col < end; ++col) {
-                put(canvas, first_row, col, '-');
-            }
-        } else if (first_col == start_col) {
-            const int start = std::min(first_row, start_row);
-            const int end = std::max(first_row, start_row);
-            for (int row = start + 1; row < end; ++row) {
-                put(canvas, row, first_col, '|');
-            }
-        }
-        put(canvas, start_row, start_col, 's');
-    }
-
     for (const auto& [coord, node] : nodes_) {
         (void)node;
         put(canvas, canvasRow(coord.y), canvasCol(coord.x), '+');
     }
     if (has_current_) {
+        // Cycle 16: drone arrow is rendered ONLY at the latest committed node
+        // position. The sub-cell offset (drone_offset_x_/y_) used to draw the
+        // arrow somewhere along the line is no longer applied — the operator
+        // sees the drone snap from node to node instead.
         const auto found = nodes_.find(current_coord_);
         const std::string heading = found == nodes_.end()
             ? std::string("unknown")
             : found->second.telemetry.arrival_heading;
-        put(canvas, canvasRow(current_coord_.y), canvasCol(current_coord_.x), headingArrow(heading));
+        put(canvas, canvasRow(current_coord_.y), canvasCol(current_coord_.x),
+            headingArrow(heading));
     }
 
     std::ostringstream stream;
@@ -223,6 +222,14 @@ std::string GridMapTracker::render() const
     return stream.str();
 }
 
+void GridMapTracker::observeDronePosition(bool valid, double grid_offset_x, double grid_offset_y)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    has_drone_pos_ = valid;
+    drone_offset_x_ = valid ? grid_offset_x : 0.0;
+    drone_offset_y_ = valid ? grid_offset_y : 0.0;
+}
+
 void GridMapTracker::reset()
 {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -235,6 +242,9 @@ void GridMapTracker::reset()
     has_current_ = false;
     has_first_ = false;
     next_order_ = 1;
+    has_drone_pos_ = false;
+    drone_offset_x_ = 0.0;
+    drone_offset_y_ = 0.0;
 }
 
 std::size_t GridMapTracker::nodeCount() const

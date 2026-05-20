@@ -362,6 +362,20 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
             node != vision->end()) {
             message.vision.grid_node = gridNodeOr(*node);
         }
+
+        // Cycle 13: drone fractional position from last committed grid node.
+        if (const auto dp = vision->find("drone_position");
+            dp != vision->end() && dp->is_object()) {
+            message.vision.drone_position.valid =
+                valueOr<bool>(*dp, "valid", message.vision.drone_position.valid);
+            message.vision.drone_position.cell_progress =
+                valueOr<double>(*dp, "cell_progress", message.vision.drone_position.cell_progress);
+            message.vision.drone_position.grid_offset_x =
+                valueOr<double>(*dp, "grid_offset_x", message.vision.drone_position.grid_offset_x);
+            message.vision.drone_position.grid_offset_y =
+                valueOr<double>(*dp, "grid_offset_y", message.vision.drone_position.grid_offset_y);
+        }
+
         message.vision.marker_detected = valueOr<bool>(*vision, "marker_detected", message.vision.marker_detected);
         message.vision.marker_id = valueOr<int>(*vision, "marker_id", message.vision.marker_id);
         message.vision.marker_count = valueOr<int>(*vision, "marker_count", message.vision.marker_count);

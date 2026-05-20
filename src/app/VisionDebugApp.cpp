@@ -66,6 +66,12 @@ public:
                 }
                 store.observe(*parsed);
                 grid_map.observe(parsed->vision.grid_node);
+                // Cycle 13: drive the heading arrow's sub-cell position from
+                // the drone's fractional progress since the last committed node.
+                grid_map.observeDronePosition(
+                    parsed->vision.drone_position.valid,
+                    parsed->vision.drone_position.grid_offset_x,
+                    parsed->vision.drone_position.grid_offset_y);
             }
         });
         return true;
