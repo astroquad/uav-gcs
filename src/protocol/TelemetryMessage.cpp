@@ -138,6 +138,15 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
             message.mission.vertiport.marker_id =
                 valueOr<int>(*v, "marker_id", message.mission.vertiport.marker_id);
         }
+        if (const auto g = mission->find("grid"); g != mission->end()) {
+            message.mission.grid.x = valueOr<int>(*g, "x", message.mission.grid.x);
+            message.mission.grid.y = valueOr<int>(*g, "y", message.mission.grid.y);
+            message.mission.grid.heading =
+                valueOr<std::string>(*g, "heading", message.mission.grid.heading);
+            message.mission.grid.snake_dir =
+                valueOr<std::string>(*g, "snake_dir", message.mission.grid.snake_dir);
+            message.mission.grid.valid = valueOr<bool>(*g, "valid", message.mission.grid.valid);
+        }
         if (const auto found = mission->find("markers_found");
             found != mission->end() && found->is_array()) {
             for (const auto& entry : *found) {

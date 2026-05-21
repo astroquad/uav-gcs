@@ -74,6 +74,11 @@ public:
                     parsed->vision.drone_position.valid,
                     parsed->vision.drone_position.grid_offset_x,
                     parsed->vision.drone_position.grid_offset_y);
+                // Cycle 25: live mission heading drives the arrow direction
+                // immediately after a turn (not at next commit). Marker
+                // cells from mission.markers_found are also forwarded so
+                // the grid stamps a marker glyph at those coords.
+                grid_map.observeMission(parsed->mission);
                 // Cycle 23: feed discovered-marker registry into MarkerTracker
                 // so the new side panel renders the id-sorted list.
                 marker_tracker.observe(parsed->mission);

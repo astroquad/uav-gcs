@@ -31,6 +31,10 @@ public:
     // Cycle 13: update the drone fractional position used by render() to draw
     // the heading arrow at a sub-cell location between commits.
     void observeDronePosition(bool valid, double grid_offset_x, double grid_offset_y);
+    // Cycle 25: live drone coord + heading from the mission state. Drives
+    // the arrow direction so it updates the moment a turn completes, not
+    // when the next node is committed.
+    void observeMission(const protocol::MissionTelemetry& mission);
     std::string render() const;
     void reset();
 
@@ -68,6 +72,15 @@ private:
     bool   has_drone_pos_ = false;
     double drone_offset_x_ = 0.0;
     double drone_offset_y_ = 0.0;
+    // Cycle 25: live mission heading + drone coord (post-turn, before next
+    // commit). Falls back to per-node arrival_heading if not set.
+    bool has_mission_heading_ = false;
+    std::string mission_heading_;       // "north"/"east"/"south"/"west"
+    GridMapCoord mission_drone_coord_;
+    bool has_mission_drone_coord_ = false;
+    // Cycle 25: marker registry mirrored from MissionTelemetry. Used to
+    // render an 'M'-style mark at marker cells in place of the generic '+'.
+    std::map<GridMapCoord, int, GridMapCoordLess> marker_cells_;  // coord -> id
     mutable std::mutex mutex_;
 };
 

@@ -220,6 +220,19 @@ struct MissionVertiportTelemetry {
     int marker_id = -1;
 };
 
+// Cycle 25: live drone coord + heading from the mission state. Distinct from
+// per-node GridNodeTelemetry.arrival_heading (which captures the heading at
+// commit time and never changes after). Used by GridMapTracker to draw the
+// drone arrow with the post-turn direction immediately, instead of waiting
+// for the next node commit.
+struct MissionGridTelemetry {
+    int x = 0;
+    int y = 0;
+    std::string heading;       // "north" / "east" / "south" / "west" / "unknown"
+    std::string snake_dir;
+    bool valid = false;
+};
+
 struct MissionTelemetry {
     bool present = false;
     std::string state;
@@ -227,6 +240,7 @@ struct MissionTelemetry {
     int markers_expected = 0;
     bool snake_complete = false;
     MissionVertiportTelemetry vertiport;
+    MissionGridTelemetry grid;
     std::vector<MissionMarkerEntry> markers_found;
 };
 

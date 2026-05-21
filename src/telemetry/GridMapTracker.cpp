@@ -196,30 +196,69 @@ std::string GridMapTracker::render() const
         (void)node;
         put(canvas, canvasRow(coord.y), canvasCol(coord.x), '+');
     }
-    if (has_current_) {
-        // Cycle 16: drone arrow is rendered ONLY at the latest committed node
-        // position. The sub-cell offset (drone_offset_x_/y_) used to draw the
-        // arrow somewhere along the line is no longer applied — the operator
-        // sees the drone snap from node to node instead.
-        const auto found = nodes_.find(current_coord_);
-        const std::string heading = found == nodes_.end()
-            ? std::string("unknown")
-            : found->second.telemetry.arrival_heading;
-        put(canvas, canvasRow(current_coord_.y), canvasCol(current_coord_.x),
+    // Cycle 25: stamp marker glyph on each marker cell. Use the id digit for
+    // 1..9 and 'M' as a generic fallback for higher ids. This overwrites the
+    // generic '+' for marker cells, then the drone arrow (below) overwrites
+    // again at the current cell so the operator always sees the live arrow.
+    for (const auto& [coord, id] : marker_cells_) {
+        const char glyph = (id >= 1 && id <= 9) ? static_cast<char>('0' + id) : 'M';
+        put(canvas, canvasRow(coord.y), canvasCol(coord.x), glyph);
+    }
+    // Cycle 25: drone arrow uses the live mission heading if available (so it
+    // flips direction immediately after a turn completes, not at next commit).
+    // Falls back to the latest committed node's arrival_heading.
+    const bool use_mission_pos =
+        has_mission_drone_coord_ && has_mission_heading_;
+    const GridMapCoord arrow_coord = use_mission_pos
+        ? mission_drone_coord_
+        : (has_current_ ? current_coord_ : GridMapCoord{});
+    const bool have_arrow = use_mission_pos || has_current_;
+    if (have_arrow) {
+        std::string heading;
+        if (has_mission_heading_) {
+            heading = mission_heading_;
+        } else {
+            const auto found = nodes_.find(arrow_coord);
+            heading = (found == nodes_.end())
+                ? std::string("unknown")
+                : found->second.telemetry.arrival_heading;
+        }
+        put(canvas, canvasRow(arrow_coord.y), canvasCol(arrow_coord.x),
             headingArrow(heading));
     }
 
     std::ostringstream stream;
-    const auto current = has_current_ ? current_coord_ : GridMapCoord {};
-    const auto found = nodes_.find(current);
-    const std::string heading = found == nodes_.end()
-        ? std::string("unknown")
-        : found->second.telemetry.arrival_heading;
+    const GridMapCoord current = arrow_coord;
+    std::string heading_label;
+    if (has_mission_heading_) {
+        heading_label = mission_heading_;
+    } else {
+        const auto found = nodes_.find(current);
+        heading_label = (found == nodes_.end())
+            ? std::string("unknown")
+            : found->second.telemetry.arrival_heading;
+    }
     stream << "[grid-map] nodes=" << nodes_.size()
            << " current=(" << current.x << ',' << current.y << ")"
-           << " heading=" << heading << "\n";
+           << " heading=" << heading_label << "\n";
+    // Cycle 25: substitute UTF-8 triangle glyphs for the N/E/S/W placeholders
+    // when emitting the final string. Done here (output stage) so the
+    // per-row canvas stays single-byte for byte-position put() math while
+    // the rendered string carries proper Unicode arrows.
+    auto emit_row = [&](const std::string& row) {
+        for (char c : row) {
+            switch (c) {
+            case 'N': stream << "\xE2\x96\xB4"; break;  // ▴
+            case 'E': stream << "\xE2\x96\xB8"; break;  // ▸
+            case 'S': stream << "\xE2\x96\xBE"; break;  // ▾
+            case 'W': stream << "\xE2\x97\x82"; break;  // ◂
+            default:  stream << c; break;
+            }
+        }
+        stream << "\n";
+    };
     for (const auto& row : canvas) {
-        stream << row << "\n";
+        emit_row(row);
     }
     return stream.str();
 }
@@ -230,6 +269,31 @@ void GridMapTracker::observeDronePosition(bool valid, double grid_offset_x, doub
     has_drone_pos_ = valid;
     drone_offset_x_ = valid ? grid_offset_x : 0.0;
     drone_offset_y_ = valid ? grid_offset_y : 0.0;
+}
+
+void GridMapTracker::observeMission(const protocol::MissionTelemetry& mission)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!mission.present) {
+        return;
+    }
+    // Live heading drives the arrow direction immediately after a turn.
+    if (mission.grid.valid && !mission.grid.heading.empty() &&
+        mission.grid.heading != "unknown") {
+        mission_heading_ = mission.grid.heading;
+        has_mission_heading_ = true;
+        mission_drone_coord_ = GridMapCoord{mission.grid.x, mission.grid.y};
+        has_mission_drone_coord_ = true;
+    }
+    // Mirror discovered markers into a coord->id map so render() can stamp
+    // a marker glyph at those cells. Vertiport is excluded (no grid coord
+    // on that record anyway) so the start pad stays unmarked.
+    const int vertiport_id = mission.vertiport.marker_id;
+    for (const auto& m : mission.markers_found) {
+        if (!m.grid_valid) continue;
+        if (m.id == vertiport_id) continue;
+        marker_cells_[GridMapCoord{m.grid_x, m.grid_y}] = m.id;
+    }
 }
 
 void GridMapTracker::reset()
@@ -247,6 +311,11 @@ void GridMapTracker::reset()
     has_drone_pos_ = false;
     drone_offset_x_ = 0.0;
     drone_offset_y_ = 0.0;
+    has_mission_heading_ = false;
+    mission_heading_.clear();
+    has_mission_drone_coord_ = false;
+    mission_drone_coord_ = {};
+    marker_cells_.clear();
 }
 
 std::size_t GridMapTracker::nodeCount() const
@@ -271,18 +340,17 @@ GridMapCoord GridMapTracker::startCoordFor(const protocol::GridNodeTelemetry& fi
 
 char GridMapTracker::headingArrow(const std::string& heading)
 {
-    if (heading == "north") {
-        return '^';
-    }
-    if (heading == "east") {
-        return '>';
-    }
-    if (heading == "south") {
-        return 'v';
-    }
-    if (heading == "west") {
-        return '<';
-    }
+    // Cycle 25: return a single-byte ASCII placeholder. The actual UTF-8
+    // arrow glyph (▴ ▸ ▾ ◂) is substituted in the final render output, so
+    // the per-row canvas stays byte-aligned during put() operations.
+    //   'N' -> ▴ (U+25B4)
+    //   'E' -> ▸ (U+25B8)
+    //   'S' -> ▾ (U+25BE)
+    //   'W' -> ◂ (U+25C2)
+    if (heading == "north") return 'N';
+    if (heading == "east")  return 'E';
+    if (heading == "south") return 'S';
+    if (heading == "west")  return 'W';
     return '@';
 }
 
