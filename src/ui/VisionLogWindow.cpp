@@ -25,6 +25,9 @@ constexpr int kMinTopPaneHeight = 120;
 constexpr int kMinDetailPaneHeight = 120;
 constexpr int kMinGridPaneWidth = 180;
 constexpr int kMinMarkersPaneWidth = 160;
+constexpr int kCursorArrow = 32512;
+constexpr int kCursorSizeWe = 32644;
+constexpr int kCursorSizeNs = 32645;
 
 enum class DragMode {
     None,
@@ -124,11 +127,11 @@ void clientSize(HWND hwnd, int& width, int& height)
 void setSplitterCursor(DragMode mode)
 {
     if (mode == DragMode::VerticalSplitter) {
-        SetCursor(LoadCursorW(nullptr, IDC_SIZEWE));
+        SetCursor(LoadCursorW(nullptr, MAKEINTRESOURCEW(kCursorSizeWe)));
     } else if (mode == DragMode::HorizontalSplitter) {
-        SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
+        SetCursor(LoadCursorW(nullptr, MAKEINTRESOURCEW(kCursorSizeNs)));
     } else {
-        SetCursor(LoadCursorW(nullptr, IDC_ARROW));
+        SetCursor(LoadCursorW(nullptr, MAKEINTRESOURCEW(kCursorArrow)));
     }
 }
 
