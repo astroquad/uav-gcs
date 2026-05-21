@@ -130,6 +130,12 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
             valueOr<int>(*mission, "markers_expected", message.mission.markers_expected);
         message.mission.snake_complete =
             valueOr<bool>(*mission, "snake_complete", message.mission.snake_complete);
+        if (const auto v = mission->find("vertiport"); v != mission->end()) {
+            message.mission.vertiport.verified =
+                valueOr<bool>(*v, "verified", message.mission.vertiport.verified);
+            message.mission.vertiport.marker_id =
+                valueOr<int>(*v, "marker_id", message.mission.vertiport.marker_id);
+        }
         if (const auto found = mission->find("markers_found");
             found != mission->end() && found->is_array()) {
             for (const auto& entry : *found) {

@@ -214,12 +214,18 @@ struct MissionMarkerEntry {
     double first_seen_s = 0.0;
 };
 
+struct MissionVertiportTelemetry {
+    bool verified = false;
+    int marker_id = -1;
+};
+
 struct MissionTelemetry {
     bool present = false;
     std::string state;
     std::string control_intent;
     int markers_expected = 0;
     bool snake_complete = false;
+    MissionVertiportTelemetry vertiport;
     std::vector<MissionMarkerEntry> markers_found;
 };
 
