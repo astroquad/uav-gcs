@@ -241,24 +241,11 @@ std::string GridMapTracker::render() const
     stream << "[grid-map] nodes=" << nodes_.size()
            << " current=(" << current.x << ',' << current.y << ")"
            << " heading=" << heading_label << "\n";
-    // Cycle 25: substitute UTF-8 triangle glyphs for the N/E/S/W placeholders
-    // when emitting the final string. Done here (output stage) so the
-    // per-row canvas stays single-byte for byte-position put() math while
-    // the rendered string carries proper Unicode arrows.
-    auto emit_row = [&](const std::string& row) {
-        for (char c : row) {
-            switch (c) {
-            case 'N': stream << "\xE2\x96\xB4"; break;  // ▴
-            case 'E': stream << "\xE2\x96\xB8"; break;  // ▸
-            case 'S': stream << "\xE2\x96\xBE"; break;  // ▾
-            case 'W': stream << "\xE2\x97\x82"; break;  // ◂
-            default:  stream << c; break;
-            }
-        }
-        stream << "\n";
-    };
+    // Cycle 27: headingArrow() reverted to plain ASCII glyphs (^ > v <),
+    // so the canvas can be streamed out byte-for-byte without any UTF-8
+    // substitution.
     for (const auto& row : canvas) {
-        emit_row(row);
+        stream << row << "\n";
     }
     return stream.str();
 }
@@ -340,17 +327,13 @@ GridMapCoord GridMapTracker::startCoordFor(const protocol::GridNodeTelemetry& fi
 
 char GridMapTracker::headingArrow(const std::string& heading)
 {
-    // Cycle 25: return a single-byte ASCII placeholder. The actual UTF-8
-    // arrow glyph (▴ ▸ ▾ ◂) is substituted in the final render output, so
-    // the per-row canvas stays byte-aligned during put() operations.
-    //   'N' -> ▴ (U+25B4)
-    //   'E' -> ▸ (U+25B8)
-    //   'S' -> ▾ (U+25BE)
-    //   'W' -> ◂ (U+25C2)
-    if (heading == "north") return 'N';
-    if (heading == "east")  return 'E';
-    if (heading == "south") return 'S';
-    if (heading == "west")  return 'W';
+    // Cycle 27: reverted to plain ASCII arrows — the Unicode triangle
+    // glyphs (Cycle 25) traded uniform shape for worse legibility against
+    // the surrounding '+' / line characters in the fixed-width font.
+    if (heading == "north") return '^';
+    if (heading == "east")  return '>';
+    if (heading == "south") return 'v';
+    if (heading == "west")  return '<';
     return '@';
 }
 
