@@ -109,9 +109,11 @@ bool GridMapTracker::observe(const protocol::GridNodeTelemetry& node)
         entry.order = next_order_++;
     }
 
-    current_coord_ = coord;
-    has_current_ = true;
-    if (!has_first_ || node.first_node) {
+    if (node.updates_current) {
+        current_coord_ = coord;
+        has_current_ = true;
+    }
+    if ((!has_first_ || node.first_node) && node.updates_current) {
         first_coord_ = coord;
         first_node_ = node;
         has_first_ = true;

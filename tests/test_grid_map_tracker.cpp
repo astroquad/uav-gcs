@@ -51,5 +51,12 @@ int main()
     assert(tracker.observe(node(6, -1, 1, "west")));
     text = tracker.render();
     assert(text.find("current=(-1,1)") != std::string::npos);
+
+    auto synthetic = node(0, -1, 0, "north");
+    synthetic.updates_current = false;
+    assert(tracker.observe(synthetic));
+    text = tracker.render();
+    assert(text.find("current=(-1,1)") != std::string::npos);
+    assert(tracker.nodeCount() == 7);
     return 0;
 }

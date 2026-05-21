@@ -56,6 +56,8 @@ GridNodeTelemetry gridNodeOr(const nlohmann::json& object, GridNodeTelemetry fal
     fallback.first_node = valueOr<bool>(object, "first_node", fallback.first_node);
     fallback.origin_local_only =
         valueOr<bool>(object, "origin_local_only", fallback.origin_local_only);
+    fallback.updates_current =
+        valueOr<bool>(object, "updates_current", fallback.updates_current);
     return fallback;
 }
 

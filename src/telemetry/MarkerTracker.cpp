@@ -27,15 +27,11 @@ std::string MarkerTracker::render() const
     std::lock_guard<std::mutex> lock(mutex_);
     std::ostringstream out;
 
-    // Cycle 23: vertiport (id=23 by default) is shown separately at the top
-    // of the panel with the literal "vertiport" label instead of a grid
-    // coord, so the operator can tell at a glance which marker is the
-    // start/end pad and is excluded from the revisit logic.
+    // The vertiport id is dynamic: onboard publishes -1 until MarkerLockYaw
+    // latches the first stable ArUco id, then the panel shows only that id.
     out << "[vertiport] ";
-    if (latest_.vertiport.verified && latest_.vertiport.marker_id >= 0) {
-        out << "id=" << latest_.vertiport.marker_id << "  vertiport (verified)";
-    } else if (latest_.vertiport.marker_id >= 0) {
-        out << "id=" << latest_.vertiport.marker_id << "  vertiport (pending)";
+    if (latest_.vertiport.marker_id >= 0) {
+        out << "id=" << latest_.vertiport.marker_id << "  vertiport";
     } else {
         out << "(not yet seen)";
     }

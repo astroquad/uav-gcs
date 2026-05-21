@@ -5,6 +5,7 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#include <windowsx.h>
 #endif
 
 #include <memory>
@@ -19,6 +20,17 @@ namespace {
 #ifdef _WIN32
 
 constexpr wchar_t kWindowClassName[] = L"AstroquadVisionLogWindow";
+constexpr int kSplitterSize = 6;
+constexpr int kMinTopPaneHeight = 120;
+constexpr int kMinDetailPaneHeight = 120;
+constexpr int kMinGridPaneWidth = 180;
+constexpr int kMinMarkersPaneWidth = 160;
+
+enum class DragMode {
+    None,
+    VerticalSplitter,
+    HorizontalSplitter,
+};
 
 struct VisionLogWindowState {
     HWND hwnd = nullptr;
@@ -26,7 +38,99 @@ struct VisionLogWindowState {
     HWND markers_edit = nullptr;  // Cycle 23
     HWND detail_edit = nullptr;
     bool closed = false;
+    bool layout_initialized = false;
+    int top_height = 0;
+    int markers_width = 0;
+    DragMode drag_mode = DragMode::None;
 };
+
+int clampTopHeight(int requested, int height)
+{
+    if (height <= kSplitterSize) {
+        return std::max(0, height);
+    }
+    const int max_top = std::max(kMinTopPaneHeight,
+                                 height - kSplitterSize - kMinDetailPaneHeight);
+    return std::clamp(requested, kMinTopPaneHeight, max_top);
+}
+
+int clampMarkersWidth(int requested, int width)
+{
+    if (width <= kSplitterSize) {
+        return std::max(0, width);
+    }
+    const int max_markers = std::max(kMinMarkersPaneWidth,
+                                     width - kSplitterSize - kMinGridPaneWidth);
+    return std::clamp(requested, kMinMarkersPaneWidth, max_markers);
+}
+
+void layoutControls(VisionLogWindowState* state, int width, int height)
+{
+    if (state == nullptr ||
+        state->grid_edit == nullptr ||
+        state->markers_edit == nullptr ||
+        state->detail_edit == nullptr) {
+        return;
+    }
+
+    if (!state->layout_initialized) {
+        state->top_height = std::clamp(height / 2, 240, 520);
+        state->markers_width = std::clamp(width / 4, 200, 360);
+        state->layout_initialized = true;
+    }
+
+    state->top_height = clampTopHeight(state->top_height, height);
+    state->markers_width = clampMarkersWidth(state->markers_width, width);
+
+    const int grid_w = std::max(0, width - state->markers_width - kSplitterSize);
+    const int detail_y = state->top_height + kSplitterSize;
+    MoveWindow(state->grid_edit,    0,                    0,
+               grid_w,             state->top_height,     TRUE);
+    MoveWindow(state->markers_edit, grid_w + kSplitterSize, 0,
+               state->markers_width, state->top_height,   TRUE);
+    MoveWindow(state->detail_edit,  0,                    detail_y,
+               width,              std::max(0, height - detail_y),
+               TRUE);
+}
+
+DragMode hitTestSplitter(const VisionLogWindowState* state, int x, int y, int width)
+{
+    if (state == nullptr || !state->layout_initialized) {
+        return DragMode::None;
+    }
+    const int grid_w = std::max(0, width - state->markers_width - kSplitterSize);
+    const bool over_vertical =
+        y >= 0 && y < state->top_height &&
+        x >= grid_w && x < grid_w + kSplitterSize;
+    if (over_vertical) {
+        return DragMode::VerticalSplitter;
+    }
+    const bool over_horizontal =
+        y >= state->top_height && y < state->top_height + kSplitterSize;
+    if (over_horizontal) {
+        return DragMode::HorizontalSplitter;
+    }
+    return DragMode::None;
+}
+
+void clientSize(HWND hwnd, int& width, int& height)
+{
+    RECT rect {};
+    GetClientRect(hwnd, &rect);
+    width = std::max(0L, rect.right - rect.left);
+    height = std::max(0L, rect.bottom - rect.top);
+}
+
+void setSplitterCursor(DragMode mode)
+{
+    if (mode == DragMode::VerticalSplitter) {
+        SetCursor(LoadCursorW(nullptr, IDC_SIZEWE));
+    } else if (mode == DragMode::HorizontalSplitter) {
+        SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
+    } else {
+        SetCursor(LoadCursorW(nullptr, IDC_ARROW));
+    }
+}
 
 std::string normalizeLineEndings(const std::string& text)
 {
@@ -107,25 +211,75 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpara
     case WM_SIZE:
         if (state != nullptr && state->grid_edit != nullptr &&
             state->markers_edit != nullptr && state->detail_edit != nullptr) {
-            // Cycle 23: 3-panel layout.
-            //   [grid (top-left, ~75% width)] [markers (top-right, ~25%)]
-            //   [detail (bottom)]
-            // Top section is ~50% of the window height so a 5x8 grid (~17
-            // rows) fits without scrolling on the default 1200x800 window.
-            const int width = LOWORD(lparam);
-            const int height = HIWORD(lparam);
-            const int gap = 2;
-            const int top_h = std::clamp(height / 2, 240, 520);
-            const int top_h_clamped = std::min(top_h, height);
-            const int markers_w = std::clamp(width / 4, 200, 360);
-            const int grid_w = std::max(0, width - markers_w - gap);
-            MoveWindow(state->grid_edit,    0,                  0, grid_w,    top_h_clamped, TRUE);
-            MoveWindow(state->markers_edit, grid_w + gap,       0, markers_w, top_h_clamped, TRUE);
-            MoveWindow(state->detail_edit,  0,            top_h_clamped + gap,
-                                            width,        std::max(0, height - top_h_clamped - gap),
-                                            TRUE);
+            layoutControls(state, LOWORD(lparam), HIWORD(lparam));
         }
         return 0;
+    case WM_SETCURSOR:
+        if (LOWORD(lparam) == HTCLIENT && state != nullptr) {
+            POINT point {};
+            GetCursorPos(&point);
+            ScreenToClient(hwnd, &point);
+            int width = 0;
+            int height = 0;
+            clientSize(hwnd, width, height);
+            (void)height;
+            const DragMode hit = state->drag_mode != DragMode::None
+                ? state->drag_mode
+                : hitTestSplitter(state, point.x, point.y, width);
+            if (hit != DragMode::None) {
+                setSplitterCursor(hit);
+                return TRUE;
+            }
+        }
+        break;
+    case WM_LBUTTONDOWN:
+        if (state != nullptr) {
+            int width = 0;
+            int height = 0;
+            clientSize(hwnd, width, height);
+            const int x = GET_X_LPARAM(lparam);
+            const int y = GET_Y_LPARAM(lparam);
+            const DragMode hit = hitTestSplitter(state, x, y, width);
+            if (hit != DragMode::None) {
+                state->drag_mode = hit;
+                SetCapture(hwnd);
+                setSplitterCursor(hit);
+                return 0;
+            }
+        }
+        break;
+    case WM_MOUSEMOVE:
+        if (state != nullptr) {
+            int width = 0;
+            int height = 0;
+            clientSize(hwnd, width, height);
+            const int x = GET_X_LPARAM(lparam);
+            const int y = GET_Y_LPARAM(lparam);
+            if (state->drag_mode == DragMode::VerticalSplitter) {
+                state->markers_width = clampMarkersWidth(
+                    width - x - (kSplitterSize / 2),
+                    width);
+                layoutControls(state, width, height);
+                setSplitterCursor(state->drag_mode);
+                return 0;
+            }
+            if (state->drag_mode == DragMode::HorizontalSplitter) {
+                state->top_height = clampTopHeight(y - (kSplitterSize / 2), height);
+                layoutControls(state, width, height);
+                setSplitterCursor(state->drag_mode);
+                return 0;
+            }
+            setSplitterCursor(hitTestSplitter(state, x, y, width));
+        }
+        break;
+    case WM_LBUTTONUP:
+    case WM_CANCELMODE:
+        if (state != nullptr && state->drag_mode != DragMode::None) {
+            state->drag_mode = DragMode::None;
+            ReleaseCapture();
+            return 0;
+        }
+        break;
     case WM_CLOSE:
         if (state != nullptr) {
             state->closed = true;

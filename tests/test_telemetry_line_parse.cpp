@@ -1,10 +1,30 @@
 #include "protocol/TelemetryMessage.hpp"
+#include "telemetry/MarkerTracker.hpp"
 
 #include <cassert>
 #include <string>
 
 int main()
 {
+    {
+        gcs::telemetry::MarkerTracker tracker;
+        gcs::protocol::MissionTelemetry mission;
+        mission.present = true;
+        mission.markers_expected = 4;
+        mission.vertiport.marker_id = -1;
+        tracker.observe(mission);
+        const std::string unseen = tracker.render();
+        assert(unseen.find("[vertiport] (not yet seen)") != std::string::npos);
+        assert(unseen.find("id=23") == std::string::npos);
+
+        mission.vertiport.marker_id = 17;
+        tracker.observe(mission);
+        const std::string seen = tracker.render();
+        assert(seen.find("id=17  vertiport") != std::string::npos);
+        assert(seen.find("pending") == std::string::npos);
+        assert(seen.find("verified") == std::string::npos);
+    }
+
     const std::string payload = R"json({
       "protocol_version": 1,
       "type": "TELEMETRY",
@@ -117,7 +137,8 @@ int main()
             "camera_branch_mask": 11,
             "grid_branch_mask": 7,
             "first_node": false,
-            "origin_local_only": true
+            "origin_local_only": true,
+            "updates_current": true
           }
         },
         "grid_node": {
@@ -129,7 +150,8 @@ int main()
           "camera_branch_mask": 11,
           "grid_branch_mask": 7,
           "first_node": false,
-          "origin_local_only": true
+          "origin_local_only": true,
+          "updates_current": true
         },
         "marker_detected": false,
         "marker_id": -1,
@@ -202,7 +224,9 @@ int main()
     assert(parsed->vision.intersection_decision.branches.size() == 2);
     assert(parsed->vision.intersection_decision.node.valid);
     assert(parsed->vision.intersection_decision.node.x == 2);
+    assert(parsed->vision.intersection_decision.node.updates_current);
     assert(parsed->vision.grid_node.grid_branch_mask == 7);
+    assert(parsed->vision.grid_node.updates_current);
     assert(parsed->debug.line_latency_ms == 2.0);
     assert(parsed->debug.intersection_latency_ms == 1.3);
     assert(parsed->debug.intersection_decision_latency_ms == 0.04);
