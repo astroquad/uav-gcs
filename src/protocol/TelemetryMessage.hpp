@@ -204,12 +204,32 @@ struct SystemTelemetry {
     double wifi_tx_bitrate_mbps = 0.0;
 };
 
+// Cycle 23: parsed view of the onboard MissionTelemetry block.
+struct MissionMarkerEntry {
+    int id = -1;
+    int grid_x = 0;
+    int grid_y = 0;
+    bool grid_valid = false;
+    double orientation_deg = 0.0;
+    double first_seen_s = 0.0;
+};
+
+struct MissionTelemetry {
+    bool present = false;
+    std::string state;
+    std::string control_intent;
+    int markers_expected = 0;
+    bool snake_complete = false;
+    std::vector<MissionMarkerEntry> markers_found;
+};
+
 struct TelemetryMessage {
     int protocol_version = 0;
     std::string type;
     std::uint32_t seq = 0;
     std::int64_t timestamp_ms = 0;
     std::string mission_state;
+    MissionTelemetry mission;  // Cycle 23
     SystemTelemetry system;
     CameraTelemetry camera;
     VisionTelemetry vision;

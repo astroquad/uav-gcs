@@ -41,12 +41,34 @@ std::string decisionBranchSummary(const protocol::IntersectionDecisionTelemetry&
 
 } // namespace
 
+namespace {
+constexpr const char* kDivider = "------------------------------------------------------------";
+}
+
+std::string formatVisionLog(
+    const VisionFrame& frame,
+    const protocol::MissionTelemetry& mission,
+    const protocol::TelemetryStats& stats)
+{
+    std::ostringstream pre;
+    if (mission.present) {
+        pre << "=== Mission ===\n"
+            << "state=" << (mission.state.empty() ? "(unknown)" : mission.state)
+            << "  intent=" << (mission.control_intent.empty() ? "(unknown)" : mission.control_intent) << "\n"
+            << "markers=" << mission.markers_found.size() << "/" << mission.markers_expected
+            << "  snake_complete=" << (mission.snake_complete ? "yes" : "no") << "\n"
+            << kDivider << "\n\n";
+    }
+    return pre.str() + formatVisionLog(frame, stats);
+}
+
 std::string formatVisionLog(
     const VisionFrame& frame,
     const protocol::TelemetryStats& stats)
 {
     std::ostringstream stream;
     stream << std::fixed << std::setprecision(1)
+           << "=== Vision / Frame ===\n"
            << "[vision] frame=" << frame.frame_seq
            << " processing=" << frame.processing_latency_ms << "ms"
            << " read=" << frame.read_frame_ms << "ms"
@@ -96,7 +118,8 @@ std::string formatVisionLog(
            << " video_skipped=" << frame.video_skipped_frames
            << " video_send_failures=" << frame.video_send_failures << "\n";
 
-    stream << "[line] detected=" << (frame.line.detected ? "yes" : "no");
+    stream << "\n=== Vision / Line ===\n"
+           << "[line] detected=" << (frame.line.detected ? "yes" : "no");
     if (frame.line.detected) {
         stream << " tracking=(" << frame.line.tracking_point_px.x
                << ',' << frame.line.tracking_point_px.y << ")"
@@ -121,7 +144,8 @@ std::string formatVisionLog(
            << " roi_px=" << frame.line_roi_pixels
            << " selected_points=" << frame.line_selected_contour_points << "\n";
 
-    stream << "[intersection] type=" << frame.intersection.type
+    stream << "\n=== Vision / Intersection ===\n"
+           << "[intersection] type=" << frame.intersection.type
            << " raw=" << frame.intersection.raw_type
            << " stable=" << (frame.intersection.stable ? "yes" : "no")
            << " held=" << (frame.intersection.held ? "yes" : "no")
@@ -154,6 +178,7 @@ std::string formatVisionLog(
            << " mask=" << frame.intersection_decision.accepted_branch_mask
            << " branches=" << decisionBranchSummary(frame.intersection_decision) << "\n";
 
+    stream << "\n=== Grid ===\n";
     if (frame.grid_node.valid) {
         stream << "[grid-node] id=" << frame.grid_node.id
                << " coord=(" << frame.grid_node.x << ',' << frame.grid_node.y << ")"
@@ -168,9 +193,10 @@ std::string formatVisionLog(
         stream << "[grid-node] none\n";
     }
 
-    stream << "[markers] count=" << frame.markers.size() << "\n";
+    stream << "\n=== Vision / Markers (current frame) ===\n"
+           << "[markers] count=" << frame.markers.size() << "\n";
     if (frame.markers.empty()) {
-        stream << "  no markers\n";
+        stream << "  (none)\n";
     } else {
         for (const auto& marker : frame.markers) {
             stream << "  id=" << marker.id

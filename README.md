@@ -1,47 +1,32 @@
 # uav-gcs
 
-Ground control software for the indoor UAV search mission.
+Ground control software for the Astroquad indoor/grid UAV search mission.
 
-This project owns telemetry display, mission monitoring, operator commands,
-video display, and GCS-side logging.
+The current GCS is an observation and tuning tool: it receives onboard
+telemetry, optional raw MJPEG debug video, draws overlays from onboard metadata,
+and renders vision/grid logs. It does not run ArUco, line, intersection, or
+mission decision logic locally.
 
 ## Layout
 
 - `config/`: runtime TOML configuration
 - `src/`: GCS application source
 - `tools/`: mock onboard and log replay utilities
-- `test_data/`: captured telemetry for repeatable tests
 - `tests/`: unit tests
-- `scripts/`: build and run helpers
-- `docs/`: design notes and protocol reference
-- `third_party/`: vendored dependencies when needed
+- `docs/`: protocol reference
 - `logs/`: runtime logs
 
-## Executable Roles
+## Executables
 
-The GCS codebase should keep debug viewers and the final operator program
-separate while sharing protocol, telemetry, video, overlay, and logging modules.
+| Executable | Role |
+|---|---|
+| `uav_gcs` | Basic telemetry receiver; final mission dashboard composition root target. |
+| `uav_gcs_vision_debug` | Primary current UI: telemetry + optional video + overlays + vision/grid log. |
+| `uav_gcs_video` | Raw MJPEG video receiver only. |
+| `mock_onboard`, `log_replayer` | Development tools. |
 
-Current executables:
-
-- `uav_gcs`: current basic telemetry receiver. This is the final GCS
-  composition root target and should eventually assemble mission dashboard,
-  command sender, telemetry/video/logging, drone state, and safety status.
-- `uav_gcs_vision_debug`: vision bring-up/debug program. It receives telemetry
-  and optional raw camera video, draws GCS-side overlays, and shows the vision
-  log. It should remain the primary vision tuning tool.
-- `uav_gcs_video`: raw MJPEG video receiver only.
-- `mock_onboard`, `log_replayer`: development tools.
-
-Code reuse rule:
-
-- Do not copy `VisionDebugApp` into `uav_gcs` main.
-- Shared receivers, protocol parsers, overlay builders, grid-map trackers, and
-  log formatters should stay in libraries that both `uav_gcs` and
-  `uav_gcs_vision_debug` can link.
-- For the 3-day flight MVP, GCS command UI is not required. GCS should focus on
-  observing telemetry/video/logs while RC/Pixhawk procedures and onboard config
-  handle start/abort/landing.
+Shared modules stay in libraries so `uav_gcs` can grow into the final dashboard
+without copying `VisionDebugApp`.
 
 ## Build
 
@@ -50,167 +35,114 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-### Windows PowerShell
-
-With the default Visual Studio CMake generator:
+Windows PowerShell with Visual Studio generator:
 
 ```powershell
 cmake -S . -B build
 cmake --build build --config Release
 ```
 
-With Ninja:
+Windows PowerShell with Ninja:
 
 ```powershell
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-## Run Telemetry Receiver
+If OpenCV is unavailable on Windows, the build uses the Win32/WIC fallback
+window backend for video decode/drawing.
+
+## Run
+
+Telemetry-only receiver:
 
 ```bash
 ./build/uav_gcs --config config
 ```
 
-On Windows with a multi-config generator, the executable may be under
-`build/Release/uav_gcs.exe` or `build/Debug/uav_gcs.exe`.
-
-```powershell
-.\build\Release\uav_gcs.exe --config config
-```
-
-If using Ninja on Windows:
+Windows:
 
 ```powershell
 .\build\uav_gcs.exe --config config
-```
-
-## Run Video Receiver
-
-`uav_gcs_video` uses OpenCV with `core`, `imgcodecs`, `highgui`, and `imgproc`
-when OpenCV is available to CMake. On Windows, if OpenCV is not installed, the
-build uses a Win32/WIC fallback video window so the target is still built.
-
-```bash
-./build/uav_gcs_video --config config
-```
-
-On Windows with a multi-config generator:
-
-```powershell
-.\build\Release\uav_gcs_video.exe --config config
-```
-
-If using Ninja on Windows:
-
-```powershell
+.\build\uav_gcs_vision_debug.exe --config config
 .\build\uav_gcs_video.exe --config config
 ```
 
-Start this before running `uav-onboard/build/video_streamer` on the Raspberry Pi.
-While this video receiver is running, it broadcasts a small discovery beacon.
-With the onboard default config, `video_streamer` uses that beacon to discover
-the laptop IP and then sends video by unicast.
+With a multi-config generator the executables may be under `build\Release`.
 
-## Run Vision Debug Receiver
+## Vision Debug Receiver
 
-Use this for the current vision development stage. It receives the raw MJPEG
-camera stream and vision telemetry at the same time, draws marker and line
-overlays on the GCS side, and opens a separate vision log window when the
-platform supports it. The vision receiver drains UDP video packets on a
-background receive thread and the UI displays only the latest complete JPEG
-frame, so OpenCV/Win32 drawing does not block socket reads.
+Use this for current onboard development:
 
 ```bash
 ./build/uav_gcs_vision_debug --config config
 ```
 
-On Windows with Ninja:
+Onboard examples:
+
+```bash
+./build/vision_debug_node --config config --line-only --line-mode dark_on_light --video
+./build/line_follow_node --config config --target sitl --vision gazebo --line-mode dark_on_light --video --gcs-ip <gcs-ip>
+./build/grid_mission_node --config config --target sitl --vision gazebo \
+  --world grid --line-mode dark_on_light --marker-count 4 \
+  --video --gcs-ip <gcs-ip>
+```
+
+Expected overlays:
+
+- ArUco marker box, corners, center, direction arrow, label.
+- Line contour in magenta.
+- Current line tracking X as a red point at camera-center Y with a green
+  horizontal error line.
+- Compact cyan intersection type and yellow present-branch rays.
+
+Expected log groups:
+
+- Packet/video receive stats.
+- Camera/system timing and Pi health.
+- Line raw/filtered/held/rejected state and detector workload.
+- Intersection raw/stabilized state and branch scores.
+- `intersection_decision` sliding-window branch evidence.
+- `grid_node` local coordinate events and `[grid-map]` ASCII map.
+
+The GCS grid map consumes `vision.grid_node` only after onboard commits a node.
+`grid_mission_node` intentionally resends the latest committed node every frame
+for UDP-loss tolerance; GCS deduplicates it. `vision.drone_position` is parsed
+and stored, but the current ASCII map renders the heading arrow at the latest
+committed node rather than at a fractional sub-cell position.
+
+If the camera window says `waiting for video stream...` while logs update, the
+onboard process is probably running telemetry-only. Add `--video` to enable raw
+MJPEG debug video.
+
+Video latency is not displayed. Pi/Windows clocks are not assumed synchronized,
+and debug video is best-effort.
+
+## Grid Arena SITL Workflow
+
+PowerShell:
 
 ```powershell
+cd astroquad\uav-gcs
 .\build\uav_gcs_vision_debug.exe --config config
 ```
 
-Start this before running `uav-onboard/build/vision_debug_node` on the
-Raspberry Pi. The onboard stream remains raw camera JPEG; marker boxes, labels,
-direction arrows, magenta line contours, red line-center points, green
-camera-center offset lines, cyan intersection markers, and local grid-map text
-are drawn only by GCS.
-
-Expected live overlay behavior:
-
-- ArUco markers: marker box, corner points, center point, direction arrow, label.
-- Line tracing: magenta connected line contour/border, a red line-center point
-  fixed on the camera-center Y row, and a green horizontal offset line from the
-  camera center to that point. The overlay is intentionally minimal so later
-  control tuning can read lateral error clearly.
-- Intersection classification: compact cyan `IX <type>` label and yellow
-  present-branch rays only for intersections in the upper/current approach
-  region. Branch score text and full decision labels are kept out of the live
-  overlay by default.
-- Grid map: the vision log appends a live ASCII map from `GridMapTracker` when
-  `vision.grid_node` telemetry records new local grid coordinates. Visited
-  nodes, the current heading marker, and discovered edges update in the fixed
-  top pane of the vision log window as the snake path advances.
-- If both detectors are enabled, both overlays are shown in the same video
-  window using the same frame sequence synchronization.
-- The separate vision log window shows packet stats, marker state, line state,
-  detector latency, intersection decision latency, onboard read/decode/JSON/
-  send/video timing, line contour workload counters, video queue drops/skips/
-  failures, video chunk counts, GCS completed/incomplete frame counts,
-  displayed FPS, Pi board/OS/load/memory/throttling/Wi-Fi state, IMX519 camera
-  focus/exposure settings, capture/processing FPS, optional Pi CPU temperature,
-  raw-vs-filtered line state, raw/stabilized intersection state,
-  `[intersection-decision]` branch evidence, and `[grid-node]` local coordinate
-  events. The log window keeps `[grid-map]` in a separate fixed top pane and
-  detailed telemetry in the lower pane. If the log window backend is
-  unavailable, the same text is printed to the terminal.
-
-The current protocol document is v1.7. `protocol_version` remains integer `1`
-for compatibility, while new fields live under `vision.intersection_decision`,
-`vision.grid_node`, and `debug.intersection_decision_latency_ms`.
-
-Raspberry Pi 4 + IMX519-78 can produce larger MJPEG frames than the previous
-Zero-class camera setup. GCS still treats video as best-effort debug data:
-complete/incomplete frame counts and displayed FPS are the useful health
-signals, while actual mission decisions must come from onboard telemetry.
-
-If the Pi discovers the GCS IP but this app still shows no telemetry packets,
-check Windows Defender Firewall. `uav_gcs_vision_debug.exe` needs inbound UDP
-allow rules for the current network profile, the same as `uav_gcs.exe` and
-`uav_gcs_video.exe`.
-
-Useful test options:
-
-```powershell
-.\build\uav_gcs_vision_debug.exe --config config
-.\build\uav_gcs_vision_debug.exe --config config --marker-log-ms 1000
-```
-
-## Local Mock Test
-
-Start the receiver in one terminal:
+WSL:
 
 ```bash
-./build/uav_gcs --config config --count 5
+bash ~/astroquad/uav-onboard/scripts/grid_arena_test.sh
+
+WINDOWS_GCS_IP="$(ip route | awk '/default/ {print $3; exit}')"
+cd ~/astroquad/uav-onboard
+./build/grid_mission_node --config config --target sitl --vision gazebo \
+  --world grid --line-mode dark_on_light --marker-count 4 \
+  --video --gcs-ip "$WINDOWS_GCS_IP"
 ```
 
-Send mock onboard telemetry in another terminal:
-
-```bash
-./build/mock_onboard --gcs-ip 127.0.0.1 --count 5
-```
-
-On Windows PowerShell with the default Visual Studio CMake generator:
-
-```powershell
-.\build\Release\uav_gcs.exe --config config --count 5
-.\build\Release\mock_onboard.exe --gcs-ip 127.0.0.1 --count 5
-```
+Watch the lower log pane for `[intersection-decision]` and `[grid-node]`; the
+fixed top pane renders `[grid-map]`.
 
 ## Tests
-
-Configure with tests enabled:
 
 ```powershell
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
@@ -218,39 +150,22 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-Current focused tests cover telemetry parsing for `vision.line`,
-`vision.intersection`, `vision.intersection_decision`, and `vision.grid_node`;
-GCS line/intersection overlay primitive generation; live grid-map tracking from
-`vision.grid_node`; and video reassembly stats so frame drop diagnostics do not
-regress silently.
+Current tests cover:
 
-## Pi Bring-Up Order
+- Telemetry parsing for line, intersection, intersection decision, and grid
+  node.
+- MJPEG chunk reassembly/drop diagnostics.
+- Line and intersection overlay primitive generation.
+- Grid map tracker dedup/edge rendering.
 
-1. Build and start this GCS receiver on the laptop.
-2. For metadata-only onboard runs, start the Pi with no `--video` flag:
-   `./build/vision_debug_node --config config --line-only --line-mode light_on_dark`.
-3. If the GCS camera window should show raw camera video and overlays, add
-   `--video` on the Pi:
-   `./build/vision_debug_node --config config --line-only --line-mode light_on_dark --video`.
-4. Confirm this GCS prints `TELEMETRY` packets with increasing `seq` values.
-5. For grid-decision validation, confirm the vision log contains
-   `[intersection-decision]`, `[grid-node]`, and `[grid-map]` lines.
-   `coord=(x,y)` is local exploration origin only until official competition
-   origin conversion is implemented. During snake exploration, coordinates are
-   advanced from the current vehicle heading; the drone is assumed to yaw at
-   turns and keep moving forward in the camera frame.
+## Troubleshooting
 
-The onboard default sends telemetry to IPv4 broadcast `255.255.255.255`. When
-debug video is enabled with `--video`, the video destination is also discovered
-or sent by broadcast, so the laptop IP usually does not need to be edited. If
-the network blocks discovery or broadcast, override the video destination with
-`--gcs-ip <laptop-ip>`.
-
-If the camera window stays on `waiting for video stream...` while the vision log
-continues to update, inspect the `[video]` counters in the log. `video_sent=0`,
-`chunks_last=0`, and `last_bytes=0` mean the Pi is intentionally running in
-telemetry-only mode; restart the Pi command with `--video`.
-
-The camera overlay intentionally does not show video latency. The debug video
-path is best-effort, and Pi/Windows clocks are not assumed to be synchronized,
-so latency estimates from raw capture timestamps are misleading.
+- If telemetry packets never arrive, check Windows Defender Firewall inbound
+  UDP rules for `uav_gcs.exe` and `uav_gcs_vision_debug.exe`.
+- If video is missing but telemetry works, inspect onboard `[video]` counters.
+  `video_sent=0`, `chunks_last=0`, and `last_bytes=0` mean video is disabled.
+- If GCS discovery/broadcast is blocked, pass `--gcs-ip <laptop-ip>` to the
+  onboard executable.
+- If the grid map seems to skip nodes, check whether onboard is sending
+  committed `vision.grid_node` events or only intersection candidates. GCS does
+  not invent grid nodes.

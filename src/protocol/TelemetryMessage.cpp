@@ -120,6 +120,34 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
 
     if (const auto mission = json.find("mission"); mission != json.end()) {
         message.mission_state = valueOr<std::string>(*mission, "state", message.mission_state);
+        // Cycle 23: parse the full mission block. Tolerate missing fields so
+        // older onboard builds still work.
+        message.mission.present = true;
+        message.mission.state = message.mission_state;
+        message.mission.control_intent =
+            valueOr<std::string>(*mission, "control_intent", message.mission.control_intent);
+        message.mission.markers_expected =
+            valueOr<int>(*mission, "markers_expected", message.mission.markers_expected);
+        message.mission.snake_complete =
+            valueOr<bool>(*mission, "snake_complete", message.mission.snake_complete);
+        if (const auto found = mission->find("markers_found");
+            found != mission->end() && found->is_array()) {
+            for (const auto& entry : *found) {
+                MissionMarkerEntry m;
+                m.id = valueOr<int>(entry, "id", -1);
+                if (const auto grid = entry.find("grid");
+                    grid != entry.end() && grid->is_array() && grid->size() >= 2) {
+                    try {
+                        m.grid_x = (*grid)[0].get<int>();
+                        m.grid_y = (*grid)[1].get<int>();
+                    } catch (const nlohmann::json::exception&) {}
+                }
+                m.grid_valid = valueOr<bool>(entry, "grid_valid", m.grid_valid);
+                m.orientation_deg = valueOr<double>(entry, "orientation_deg", m.orientation_deg);
+                m.first_seen_s = valueOr<double>(entry, "first_seen_s", m.first_seen_s);
+                message.mission.markers_found.push_back(m);
+            }
+        }
     }
 
     if (const auto system = json.find("system"); system != json.end()) {

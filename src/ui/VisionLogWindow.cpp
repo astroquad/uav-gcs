@@ -23,6 +23,7 @@ constexpr wchar_t kWindowClassName[] = L"AstroquadVisionLogWindow";
 struct VisionLogWindowState {
     HWND hwnd = nullptr;
     HWND grid_edit = nullptr;
+    HWND markers_edit = nullptr;  // Cycle 23
     HWND detail_edit = nullptr;
     bool closed = false;
 };
@@ -81,57 +82,48 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpara
     switch (message) {
     case WM_CREATE:
         if (state != nullptr) {
+            const DWORD common_style = WS_CHILD | WS_VISIBLE | WS_VSCROLL |
+                                       ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL |
+                                       ES_READONLY;
             state->grid_edit = CreateWindowExW(
-                WS_EX_CLIENTEDGE,
-                L"EDIT",
-                L"",
-                WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_LEFT | ES_MULTILINE |
-                    ES_AUTOVSCROLL | ES_READONLY,
-                0,
-                0,
-                0,
-                0,
-                hwnd,
-                nullptr,
-                GetModuleHandleW(nullptr),
-                nullptr);
+                WS_EX_CLIENTEDGE, L"EDIT", L"",
+                common_style, 0, 0, 0, 0,
+                hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+            // Cycle 23: third panel for the discovered-marker registry.
+            state->markers_edit = CreateWindowExW(
+                WS_EX_CLIENTEDGE, L"EDIT", L"",
+                common_style, 0, 0, 0, 0,
+                hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
             state->detail_edit = CreateWindowExW(
-                WS_EX_CLIENTEDGE,
-                L"EDIT",
-                L"",
-                WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_LEFT | ES_MULTILINE |
-                    ES_AUTOVSCROLL | ES_READONLY,
-                0,
-                0,
-                0,
-                0,
-                hwnd,
-                nullptr,
-                GetModuleHandleW(nullptr),
-                nullptr);
-            SendMessageW(state->grid_edit, WM_SETFONT, reinterpret_cast<WPARAM>(GetStockObject(ANSI_FIXED_FONT)), TRUE);
-            SendMessageW(state->detail_edit, WM_SETFONT, reinterpret_cast<WPARAM>(GetStockObject(ANSI_FIXED_FONT)), TRUE);
+                WS_EX_CLIENTEDGE, L"EDIT", L"",
+                common_style, 0, 0, 0, 0,
+                hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+            const HFONT font = reinterpret_cast<HFONT>(GetStockObject(ANSI_FIXED_FONT));
+            SendMessageW(state->grid_edit,    WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+            SendMessageW(state->markers_edit, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+            SendMessageW(state->detail_edit,  WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
         }
         return 0;
     case WM_SIZE:
-        if (state != nullptr && state->grid_edit != nullptr && state->detail_edit != nullptr) {
+        if (state != nullptr && state->grid_edit != nullptr &&
+            state->markers_edit != nullptr && state->detail_edit != nullptr) {
+            // Cycle 23: 3-panel layout.
+            //   [grid (top-left, ~75% width)] [markers (top-right, ~25%)]
+            //   [detail (bottom)]
+            // Top section is ~50% of the window height so a 5x8 grid (~17
+            // rows) fits without scrolling on the default 1200x800 window.
             const int width = LOWORD(lparam);
             const int height = HIWORD(lparam);
-            const int grid_height = std::clamp(height / 3, 120, 260);
-            MoveWindow(
-                state->grid_edit,
-                0,
-                0,
-                width,
-                std::min(grid_height, height),
-                TRUE);
-            MoveWindow(
-                state->detail_edit,
-                0,
-                std::min(grid_height, height),
-                width,
-                std::max(0, height - grid_height),
-                TRUE);
+            const int gap = 2;
+            const int top_h = std::clamp(height / 2, 240, 520);
+            const int top_h_clamped = std::min(top_h, height);
+            const int markers_w = std::clamp(width / 4, 200, 360);
+            const int grid_w = std::max(0, width - markers_w - gap);
+            MoveWindow(state->grid_edit,    0,                  0, grid_w,    top_h_clamped, TRUE);
+            MoveWindow(state->markers_edit, grid_w + gap,       0, markers_w, top_h_clamped, TRUE);
+            MoveWindow(state->detail_edit,  0,            top_h_clamped + gap,
+                                            width,        std::max(0, height - top_h_clamped - gap),
+                                            TRUE);
         }
         return 0;
     case WM_CLOSE:
@@ -145,6 +137,7 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpara
             state->closed = true;
             state->hwnd = nullptr;
             state->grid_edit = nullptr;
+            state->markers_edit = nullptr;
             state->detail_edit = nullptr;
         }
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
@@ -194,8 +187,10 @@ VisionLogWindow::VisionLogWindow(std::string title)
         WS_OVERLAPPEDWINDOW | WS_VISIBLE,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
-        640,
-        360,
+        // Cycle 23: bumped 640x360 -> 1200x800 so the new 3-panel layout
+        // (grid + markers + detail) has room for a 5x8 grid + sidebar.
+        1200,
+        800,
         nullptr,
         nullptr,
         GetModuleHandleW(nullptr),
@@ -223,26 +218,34 @@ VisionLogWindow::~VisionLogWindow()
 
 bool VisionLogWindow::update(const std::string& text)
 {
-    return update({}, text);
+    return update({}, {}, text);
 }
 
 bool VisionLogWindow::update(const std::string& grid_text, const std::string& detail_text)
+{
+    return update(grid_text, {}, detail_text);
+}
+
+bool VisionLogWindow::update(const std::string& grid_text,
+                             const std::string& markers_text,
+                             const std::string& detail_text)
 {
     auto* state = static_cast<VisionLogWindowState*>(native_state_);
     if (state == nullptr || state->closed) {
         return false;
     }
 #ifdef _WIN32
-    if (state->grid_edit == nullptr || state->detail_edit == nullptr) {
+    if (state->grid_edit == nullptr || state->markers_edit == nullptr ||
+        state->detail_edit == nullptr) {
         return false;
     }
-    const std::wstring wide_grid_text = widen(grid_text);
-    const std::wstring wide_detail_text = widen(detail_text);
-    SetWindowTextW(state->grid_edit, wide_grid_text.c_str());
-    SetWindowTextW(state->detail_edit, wide_detail_text.c_str());
+    SetWindowTextW(state->grid_edit,    widen(grid_text).c_str());
+    SetWindowTextW(state->markers_edit, widen(markers_text).c_str());
+    SetWindowTextW(state->detail_edit,  widen(detail_text).c_str());
     return true;
 #else
     (void)grid_text;
+    (void)markers_text;
     (void)detail_text;
     return false;
 #endif
@@ -268,6 +271,7 @@ bool VisionLogWindow::available() const
 #ifdef _WIN32
     return state->hwnd != nullptr &&
         state->grid_edit != nullptr &&
+        state->markers_edit != nullptr &&
         state->detail_edit != nullptr;
 #else
     return false;

@@ -6,6 +6,7 @@
 #include "overlay/MarkerOverlay.hpp"
 #include "protocol/TelemetryMessage.hpp"
 #include "telemetry/GridMapTracker.hpp"
+#include "telemetry/MarkerTracker.hpp"
 #include "telemetry/TelemetryStore.hpp"
 #include "telemetry/VisionLogFormatter.hpp"
 #include "ui/VisionLogWindow.hpp"
@@ -34,7 +35,8 @@ public:
         std::uint16_t port,
         int timeout_ms,
         telemetry::TelemetryStore& store,
-        telemetry::GridMapTracker& grid_map)
+        telemetry::GridMapTracker& grid_map,
+        telemetry::MarkerTracker& marker_tracker)
     {
         if (!receiver_.open(port)) {
             last_error_ = receiver_.lastError();
@@ -42,7 +44,7 @@ public:
         }
 
         running_ = true;
-        worker_ = std::thread([this, timeout_ms, &store, &grid_map]() {
+        worker_ = std::thread([this, timeout_ms, &store, &grid_map, &marker_tracker]() {
             while (running_) {
                 std::string payload;
                 if (!receiver_.receive(payload, std::clamp(timeout_ms, 1, 100))) {
@@ -72,6 +74,9 @@ public:
                     parsed->vision.drone_position.valid,
                     parsed->vision.drone_position.grid_offset_x,
                     parsed->vision.drone_position.grid_offset_y);
+                // Cycle 23: feed discovered-marker registry into MarkerTracker
+                // so the new side panel renders the id-sorted list.
+                marker_tracker.observe(parsed->mission);
             }
         });
         return true;
@@ -231,12 +236,14 @@ int VisionDebugApp::run(const VisionDebugOptions& options)
 
     telemetry::TelemetryStore telemetry_store;
     telemetry::GridMapTracker grid_map_tracker;
+    telemetry::MarkerTracker marker_tracker;
     TelemetryThread telemetry_thread;
     if (!telemetry_thread.start(
             options.telemetry_port,
             options.telemetry_timeout_ms,
             telemetry_store,
-            grid_map_tracker)) {
+            grid_map_tracker,
+            marker_tracker)) {
         std::cerr << "failed to open UDP telemetry receiver on port "
                   << options.telemetry_port << ": " << telemetry_thread.takeLastError() << "\n";
         video_thread.stop();
@@ -331,27 +338,33 @@ int VisionDebugApp::run(const VisionDebugOptions& options)
         if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_log_time).count()
             >= options.marker_log_interval_ms) {
             const auto grid_text = grid_map_tracker.render();
+            const auto markers_text = marker_tracker.render();
             if (const auto latest = telemetry_store.latest()) {
-                auto text = telemetry::formatVisionLog(*latest, telemetry_thread.stats());
-                text += formatVideoStatsLine(
+                // Cycle 23: mission-aware overload so the detail panel leads
+                // with the "=== Mission ===" section before the per-frame
+                // vision dump.
+                auto detail = telemetry::formatVisionLog(
+                    *latest, marker_tracker.latestMission(), telemetry_thread.stats());
+                detail += formatVideoStatsLine(
                     video_thread.stats(),
                     video_thread.overwrittenFrames(),
                     display_fps);
-                if (!log_window.update(grid_text, text)) {
-                    std::cout << grid_text << text;
+                if (!log_window.update(grid_text, markers_text, detail)) {
+                    std::cout << grid_text << markers_text << detail;
                 }
             } else {
                 const auto stats = telemetry_thread.stats();
-                std::string text =
+                std::string detail =
+                    "=== Network ===\n"
                     "[vision] no telemetry packets yet packets=" +
                     std::to_string(stats.received_packets) +
                     " dropped=" + std::to_string(stats.dropped_packets) + "\n";
-                text += formatVideoStatsLine(
+                detail += formatVideoStatsLine(
                     video_thread.stats(),
                     video_thread.overwrittenFrames(),
                     display_fps);
-                if (!log_window.update(grid_text, text)) {
-                    std::cout << grid_text << text;
+                if (!log_window.update(grid_text, markers_text, detail)) {
+                    std::cout << grid_text << markers_text << detail;
                 }
             }
             last_log_time = now;
