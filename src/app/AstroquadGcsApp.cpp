@@ -1,4 +1,4 @@
-#include "app/VisionDebugApp.hpp"
+#include "app/AstroquadGcsApp.hpp"
 
 #include "network/UdpTelemetryReceiver.hpp"
 #include "overlay/IntersectionOverlay.hpp"
@@ -229,7 +229,7 @@ std::string formatVideoStatsLine(
 
 } // namespace
 
-int VisionDebugApp::run(const VisionDebugOptions& options)
+int AstroquadGcsApp::run(const AstroquadGcsOptions& options)
 {
     VideoReceiveThread video_thread;
     if (!video_thread.start(options.video_port, options.video_timeout_ms)) {
@@ -258,10 +258,10 @@ int VisionDebugApp::run(const VisionDebugOptions& options)
     beacon.start(options.video_port);
 
     ui::VideoWindow window(options.title);
-    ui::VisionLogWindow log_window("Astroquad Vision Log");
+    ui::VisionLogWindow log_window("Astroquad GCS Log");
     window.showStatus("waiting for video stream...");
 
-    std::cout << "uav_gcs_vision_debug\n"
+    std::cout << "astroquad-gcs\n"
               << "  video UDP port: " << options.video_port << "\n"
               << "  telemetry UDP port: " << options.telemetry_port << "\n"
               << "  video_timeout_ms: " << options.video_timeout_ms << "\n"

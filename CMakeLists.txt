@@ -82,13 +82,13 @@ elseif(WIN32)
     list(APPEND GCS_VIDEO_LIBS user32 gdi32 ole32 windowscodecs)
     message(STATUS "OpenCV was not found; using Win32 WIC video window backend.")
 else()
-    message(WARNING "OpenCV was not found; uav_gcs_video will not be built.")
+    message(WARNING "OpenCV was not found; video UI executables will not be built.")
 endif()
 
 if(GCS_VIDEO_UI_SOURCE)
     add_library(gcs_video STATIC
         src/app/VideoViewerApp.cpp
-        src/app/VisionDebugApp.cpp
+        src/app/AstroquadGcsApp.cpp
         src/overlay/IntersectionOverlay.cpp
         src/overlay/LineOverlay.cpp
         src/overlay/MarkerOverlay.cpp
@@ -113,10 +113,11 @@ if(GCS_VIDEO_UI_SOURCE)
     )
     target_link_libraries(uav_gcs_video PRIVATE gcs_core gcs_video)
 
-    add_executable(uav_gcs_vision_debug
-        src/vision_debug_main.cpp
+    add_executable(astroquad_gcs
+        src/astroquad_gcs_main.cpp
     )
-    target_link_libraries(uav_gcs_vision_debug PRIVATE gcs_video gcs_core)
+    set_target_properties(astroquad_gcs PROPERTIES OUTPUT_NAME "astroquad-gcs")
+    target_link_libraries(astroquad_gcs PRIVATE gcs_video gcs_core)
 endif()
 
 add_executable(uav_gcs

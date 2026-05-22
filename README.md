@@ -20,13 +20,13 @@ mission decision logic locally.
 
 | Executable | Role |
 |---|---|
-| `uav_gcs` | Basic telemetry receiver; final mission dashboard composition root target. |
-| `uav_gcs_vision_debug` | Primary current UI: telemetry + optional video + overlays + vision/grid log. |
+| `astroquad-gcs` | Primary current GCS UI: telemetry + optional video + overlays + vision/grid log. |
+| `uav_gcs` | Basic telemetry receiver / development probe. |
 | `uav_gcs_video` | Raw MJPEG video receiver only. |
 | `mock_onboard`, `log_replayer` | Development tools. |
 
-Shared modules stay in libraries so `uav_gcs` can grow into the final dashboard
-without copying `VisionDebugApp`.
+Shared modules stay in libraries so the main GCS can grow without copying
+application wiring.
 
 ## Build
 
@@ -54,6 +54,12 @@ window backend for video decode/drawing.
 
 ## Run
 
+Main GCS:
+
+```bash
+./build/astroquad-gcs --config config
+```
+
 Telemetry-only receiver:
 
 ```bash
@@ -63,19 +69,19 @@ Telemetry-only receiver:
 Windows:
 
 ```powershell
+.\build\astroquad-gcs.exe --config config
 .\build\uav_gcs.exe --config config
-.\build\uav_gcs_vision_debug.exe --config config
 .\build\uav_gcs_video.exe --config config
 ```
 
 With a multi-config generator the executables may be under `build\Release`.
 
-## Vision Debug Receiver
+## Astroquad GCS
 
 Use this for current onboard development:
 
 ```bash
-./build/uav_gcs_vision_debug --config config
+./build/astroquad-gcs --config config
 ```
 
 Onboard examples:
@@ -124,7 +130,7 @@ PowerShell:
 
 ```powershell
 cd astroquad\uav-gcs
-.\build\uav_gcs_vision_debug.exe --config config
+.\build\astroquad-gcs.exe --config config
 ```
 
 WSL:
@@ -161,7 +167,7 @@ Current tests cover:
 ## Troubleshooting
 
 - If telemetry packets never arrive, check Windows Defender Firewall inbound
-  UDP rules for `uav_gcs.exe` and `uav_gcs_vision_debug.exe`.
+  UDP rules for `astroquad-gcs.exe` and `uav_gcs.exe`.
 - If video is missing but telemetry works, inspect onboard `[video]` counters.
   `video_sent=0`, `chunks_last=0`, and `last_bytes=0` mean video is disabled.
 - If GCS discovery/broadcast is blocked, pass `--gcs-ip <laptop-ip>` to the

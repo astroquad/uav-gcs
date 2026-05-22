@@ -13,9 +13,9 @@ metadata를 영상과 로그로 보여 주는 것이다.
 
 현재 구현은 final dashboard가 아니라 안정적인 관제/튜닝 도구다.
 
-- `uav_gcs`: basic telemetry receiver, 최종 composition root 목표.
-- `uav_gcs_vision_debug`: 현재 주력 UI. Telemetry, optional MJPEG video,
+- `astroquad-gcs`: 현재 주력 GCS UI. Telemetry, optional MJPEG video,
   overlays, vision/grid log.
+- `uav_gcs`: basic telemetry receiver / development probe.
 - `uav_gcs_video`: raw MJPEG viewer.
 
 GCS는 mission 판단을 하지 않는다. Grid mission의 node commit, snake
@@ -44,7 +44,7 @@ direction, marker commit은 모두 onboard가 결정한다.
 | Telemetry v1.8 parser | 구현됨 | `src/protocol/TelemetryMessage.*` |
 | Packet sequence stats | 구현됨 | `src/protocol/TelemetryMessage.*` |
 | Video-only viewer | 구현됨 | `src/video_main.cpp`, `src/app/VideoViewerApp.*` |
-| Vision debug receiver | 구현됨 | `src/vision_debug_main.cpp`, `src/app/VisionDebugApp.*` |
+| Main GCS receiver | 구현됨 | `src/astroquad_gcs_main.cpp`, `src/app/AstroquadGcsApp.*` |
 | UDP MJPEG chunk receiver/reassembler | 구현됨 | `src/video/UdpMjpegReceiver.*`, `src/video/JpegFrameReassembler.*` |
 | GCS discovery beacon | 구현됨 | `src/video/GcsDiscoveryBeacon.*` |
 | Marker/line/intersection overlays | 구현됨 | `src/overlay/*` |
@@ -72,7 +72,7 @@ Windows/Linux laptop
        ├─ UDP telemetry receiver
        ├─ UDP MJPEG debug video receiver
        ├─ GCS-side overlay/log window
-       └─ final uav_gcs composition root target
+       └─ current astroquad-gcs composition root target
 
 Wi-Fi / LAN
   ├─ telemetry UDP 14550: onboard -> GCS
@@ -86,7 +86,7 @@ Raspberry Pi 4 + IMX519 + Pixhawk1
        └─ telemetry / debug video sender
 ```
 
-## 5. Current Vision Debug Requirements
+## 5. Current Astroquad GCS Requirements
 
 | 항목 | 요구사항 |
 |---|---|
@@ -124,9 +124,9 @@ Raspberry Pi 4 + IMX519 + Pixhawk1
 
 Current UI:
 
+- `astroquad-gcs`: camera window + vision/grid/mission log window.
 - `uav_gcs`: console telemetry receiver.
 - `uav_gcs_video`: camera window only.
-- `uav_gcs_vision_debug`: camera window + vision log window.
 - OpenCV가 있으면 OpenCV highgui backend.
 - Windows에서 OpenCV가 없으면 Win32/WIC backend.
 
@@ -191,7 +191,7 @@ uav-gcs/
 │  └─ ui.toml
 ├─ docs/PROTOCOL.md
 ├─ src/
-│  ├─ app/                  # VideoViewerApp, VisionDebugApp
+│  ├─ app/                  # VideoViewerApp, AstroquadGcsApp
 │  ├─ common/               # NetworkConfig
 │  ├─ network/              # UdpTelemetryReceiver
 │  ├─ overlay/              # Marker/Line/Intersection overlay primitives
@@ -201,7 +201,7 @@ uav-gcs/
 │  ├─ video/                # discovery, packet parse, reassembly, receiver
 │  ├─ main.cpp
 │  ├─ video_main.cpp
-│  └─ vision_debug_main.cpp
+│  └─ astroquad_gcs_main.cpp
 ├─ tests/
 └─ tools/
 ```
@@ -210,7 +210,7 @@ Key files:
 
 | File | Role |
 |---|---|
-| `src/app/VisionDebugApp.*` | telemetry thread, video thread, overlay, log orchestration |
+| `src/app/AstroquadGcsApp.*` | telemetry thread, video thread, overlay, log orchestration |
 | `src/protocol/TelemetryMessage.*` | v1.8 telemetry parse and sequence stats |
 | `src/telemetry/GridMapTracker.*` | committed local grid map rendering/dedup |
 | `src/telemetry/VisionLogFormatter.*` | human-readable vision/grid logs |
@@ -231,7 +231,7 @@ Windows Ninja:
 ```powershell
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-.\build\uav_gcs_vision_debug.exe --config config
+.\build\astroquad-gcs.exe --config config
 ```
 
 Tests:
@@ -282,7 +282,7 @@ failsafe paths.
 
 | 순서 | 작업 | 이유/검증 |
 |---:|---|---|
-| 1 | `uav_gcs_vision_debug` 안정화 유지 | line/grid mission tuning의 관제 도구 |
+| 1 | `astroquad-gcs` 안정화 유지 | line/grid mission tuning의 관제 도구 |
 | 2 | Grid mission telemetry display 확장 | current console-only mission state를 GCS에 구조화 |
 | 3 | Mission/drone state model 추가 | dashboard/command ACK 기반 |
 | 4 | Command sender channel 구현 | START/ABORT/EMERGENCY LAND/backend 선택 |

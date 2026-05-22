@@ -1,4 +1,4 @@
-#include "app/VisionDebugApp.hpp"
+#include "app/AstroquadGcsApp.hpp"
 #include "common/NetworkConfig.hpp"
 
 #include <toml++/toml.hpp>
@@ -21,7 +21,7 @@ struct Options {
 void printUsage()
 {
     std::cout
-        << "Usage: uav_gcs_vision_debug [options]\n\n"
+        << "Usage: astroquad-gcs [options]\n\n"
         << "Options:\n"
         << "  --config <dir>          Config directory containing network.toml/ui.toml\n"
         << "  --video-port <n>        Override video UDP port\n"
@@ -79,7 +79,7 @@ std::string joinConfigPath(const std::string& config_dir, const std::string& fil
     return config_dir + "/" + filename;
 }
 
-void loadUiConfig(const std::string& config_dir, gcs::app::VisionDebugOptions& options)
+void loadUiConfig(const std::string& config_dir, gcs::app::AstroquadGcsOptions& options)
 {
     try {
         const auto table = toml::parse_file(joinConfigPath(config_dir, "ui.toml"));
@@ -99,7 +99,7 @@ int main(int argc, char** argv)
     const Options options = parseOptions(argc, argv);
     const auto network_config = gcs::common::loadNetworkConfig(options.config_dir);
 
-    gcs::app::VisionDebugOptions app_options;
+    gcs::app::AstroquadGcsOptions app_options;
     app_options.video_port = network_config.video_port;
     app_options.telemetry_port = network_config.telemetry_port;
     app_options.telemetry_timeout_ms = network_config.telemetry_timeout_ms;
@@ -118,6 +118,6 @@ int main(int argc, char** argv)
         app_options.marker_log_interval_ms = options.marker_log_interval_ms;
     }
 
-    gcs::app::VisionDebugApp app;
+    gcs::app::AstroquadGcsApp app;
     return app.run(app_options);
 }
