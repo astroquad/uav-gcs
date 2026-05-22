@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.16)
 
 project(uav_gcs LANGUAGES CXX)
 
+if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -16,12 +20,11 @@ function(ensure_header_dependency dep_name dep_url dep_include_subdir dep_header
         return()
     endif()
 
-    FetchContent_Declare(
-        ${dep_name}
-        URL ${dep_url}
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-        TLS_VERIFY FALSE
-    )
+    set(fetch_args URL ${dep_url} TLS_VERIFY FALSE)
+    if(POLICY CMP0135)
+        list(APPEND fetch_args DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+    endif()
+    FetchContent_Declare(${dep_name} ${fetch_args})
     FetchContent_MakeAvailable(${dep_name})
     FetchContent_GetProperties(${dep_name} SOURCE_DIR dep_source_dir)
     set(${out_var} "${dep_source_dir}/${dep_include_subdir}" PARENT_SCOPE)

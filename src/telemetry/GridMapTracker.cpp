@@ -80,6 +80,9 @@ bool GridMapTracker::observe(const protocol::GridNodeTelemetry& node)
     if (!node.valid) {
         return false;
     }
+    if (grid_map_finalized_) {
+        return false;
+    }
     if (node.id != 0 && observed_ids_.find(node.id) != observed_ids_.end()) {
         return false;
     }
@@ -264,6 +267,9 @@ void GridMapTracker::observeMission(const protocol::MissionTelemetry& mission)
     if (!mission.present) {
         return;
     }
+    if (mission.grid_map_finalized) {
+        grid_map_finalized_ = true;
+    }
     // Live heading drives the arrow direction immediately after a turn.
     if (mission.grid.valid && !mission.grid.heading.empty() &&
         mission.grid.heading != "unknown") {
@@ -303,6 +309,7 @@ void GridMapTracker::reset()
     has_mission_drone_coord_ = false;
     mission_drone_coord_ = {};
     marker_cells_.clear();
+    grid_map_finalized_ = false;
 }
 
 std::size_t GridMapTracker::nodeCount() const

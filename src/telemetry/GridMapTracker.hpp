@@ -81,6 +81,7 @@ private:
     // Cycle 25: marker registry mirrored from MissionTelemetry. Used to
     // render an 'M'-style mark at marker cells in place of the generic '+'.
     std::map<GridMapCoord, int, GridMapCoordLess> marker_cells_;  // coord -> id
+    bool grid_map_finalized_ = false;
     mutable std::mutex mutex_;
 };
 

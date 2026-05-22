@@ -52,10 +52,16 @@ std::string MarkerTracker::render() const
     const int vertiport_id = latest_.vertiport.marker_id;
     for (const auto& [id, m] : markers_) {
         if (id == vertiport_id) continue;
-        out << "id=" << id
+        out << (m.revisited ? "[x] " : "[ ] ")
+            << "id=" << id
             << "  grid=(" << std::setw(2) << m.grid_x
             << "," << std::setw(2) << m.grid_y << ")"
-            << "  t=" << std::fixed << std::setprecision(1) << m.first_seen_s << "s"
+            << "  t=" << std::fixed << std::setprecision(1) << m.first_seen_s << "s";
+        if (m.revisited) {
+            out << "  visited=" << std::fixed << std::setprecision(1)
+                << m.revisited_s << "s";
+        }
+        out
             << "\r\n";
     }
     return out.str();

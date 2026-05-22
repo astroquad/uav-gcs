@@ -213,6 +213,8 @@ struct MissionMarkerEntry {
     bool grid_valid = false;
     double orientation_deg = 0.0;
     double first_seen_s = 0.0;
+    bool revisited = false;
+    double revisited_s = 0.0;
 };
 
 struct MissionVertiportTelemetry {
@@ -239,6 +241,11 @@ struct MissionTelemetry {
     std::string control_intent;
     int markers_expected = 0;
     bool snake_complete = false;
+    bool revisit_active = false;
+    bool grid_map_finalized = false;
+    std::string revisit_order;
+    int revisit_target_id = -1;
+    int revisit_remaining = 0;
     MissionVertiportTelemetry vertiport;
     MissionGridTelemetry grid;
     std::vector<MissionMarkerEntry> markers_found;

@@ -132,6 +132,16 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
             valueOr<int>(*mission, "markers_expected", message.mission.markers_expected);
         message.mission.snake_complete =
             valueOr<bool>(*mission, "snake_complete", message.mission.snake_complete);
+        message.mission.revisit_active =
+            valueOr<bool>(*mission, "revisit_active", message.mission.revisit_active);
+        message.mission.grid_map_finalized =
+            valueOr<bool>(*mission, "grid_map_finalized", message.mission.grid_map_finalized);
+        message.mission.revisit_order =
+            valueOr<std::string>(*mission, "revisit_order", message.mission.revisit_order);
+        message.mission.revisit_target_id =
+            valueOr<int>(*mission, "revisit_target_id", message.mission.revisit_target_id);
+        message.mission.revisit_remaining =
+            valueOr<int>(*mission, "revisit_remaining", message.mission.revisit_remaining);
         if (const auto v = mission->find("vertiport"); v != mission->end()) {
             message.mission.vertiport.verified =
                 valueOr<bool>(*v, "verified", message.mission.vertiport.verified);
@@ -162,6 +172,8 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
                 m.grid_valid = valueOr<bool>(entry, "grid_valid", m.grid_valid);
                 m.orientation_deg = valueOr<double>(entry, "orientation_deg", m.orientation_deg);
                 m.first_seen_s = valueOr<double>(entry, "first_seen_s", m.first_seen_s);
+                m.revisited = valueOr<bool>(entry, "revisited", m.revisited);
+                m.revisited_s = valueOr<double>(entry, "revisited_s", m.revisited_s);
                 message.mission.markers_found.push_back(m);
             }
         }

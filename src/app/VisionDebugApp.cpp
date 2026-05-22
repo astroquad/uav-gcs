@@ -67,6 +67,10 @@ public:
                     stats_.observe(*parsed);
                 }
                 store.observe(*parsed);
+                // Mission may mark the map finalized at the start of marker
+                // revisit. Apply that before observing grid_node so a packet
+                // cannot add one last node after freeze.
+                grid_map.observeMission(parsed->mission);
                 grid_map.observe(parsed->vision.grid_node);
                 // Cycle 13: drive the heading arrow's sub-cell position from
                 // the drone's fractional progress since the last committed node.
@@ -74,11 +78,6 @@ public:
                     parsed->vision.drone_position.valid,
                     parsed->vision.drone_position.grid_offset_x,
                     parsed->vision.drone_position.grid_offset_y);
-                // Cycle 25: live mission heading drives the arrow direction
-                // immediately after a turn (not at next commit). Marker
-                // cells from mission.markers_found are also forwarded so
-                // the grid stamps a marker glyph at those coords.
-                grid_map.observeMission(parsed->mission);
                 // Cycle 23: feed discovered-marker registry into MarkerTracker
                 // so the new side panel renders the id-sorted list.
                 marker_tracker.observe(parsed->mission);
