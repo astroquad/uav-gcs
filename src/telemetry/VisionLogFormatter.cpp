@@ -1,6 +1,7 @@
 #include "telemetry/VisionLogFormatter.hpp"
 
 #include <cctype>
+#include <algorithm>
 #include <iomanip>
 #include <sstream>
 
@@ -39,6 +40,26 @@ std::string decisionBranchSummary(const protocol::IntersectionDecisionTelemetry&
     return stream.str();
 }
 
+bool markerRevisitEnabled(const protocol::MissionTelemetry& mission)
+{
+    return !mission.revisit_order.empty() && mission.revisit_order != "none";
+}
+
+bool markerRevisitSucceeded(const protocol::MissionTelemetry& mission)
+{
+    if (!markerRevisitEnabled(mission) || mission.markers_found.empty()) {
+        return false;
+    }
+    if (mission.markers_expected > 0 &&
+        static_cast<int>(mission.markers_found.size()) < mission.markers_expected) {
+        return false;
+    }
+    return std::all_of(mission.markers_found.begin(), mission.markers_found.end(),
+        [](const protocol::MissionMarkerEntry& marker) {
+            return marker.revisited;
+        });
+}
+
 } // namespace
 
 namespace {
@@ -56,7 +77,12 @@ std::string formatVisionLog(
             << "state=" << (mission.state.empty() ? "(unknown)" : mission.state)
             << "  intent=" << (mission.control_intent.empty() ? "(unknown)" : mission.control_intent) << "\n"
             << "markers=" << mission.markers_found.size() << "/" << mission.markers_expected
-            << "  snake_complete=" << (mission.snake_complete ? "yes" : "no") << "\n"
+            << "  snake_complete=" << (mission.snake_complete ? "yes" : "no");
+        if (markerRevisitEnabled(mission)) {
+            pre << "  marker_revisit="
+                << (markerRevisitSucceeded(mission) ? "yes" : "no");
+        }
+        pre << "\n"
             << kDivider << "\n\n";
     }
     return pre.str() + formatVisionLog(frame, stats);
