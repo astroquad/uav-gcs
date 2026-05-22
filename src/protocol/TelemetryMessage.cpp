@@ -134,8 +134,22 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
             valueOr<bool>(*mission, "snake_complete", message.mission.snake_complete);
         message.mission.revisit_active =
             valueOr<bool>(*mission, "revisit_active", message.mission.revisit_active);
+        message.mission.return_active =
+            valueOr<bool>(*mission, "return_active", message.mission.return_active);
+        message.mission.return_phase =
+            valueOr<std::string>(*mission, "return_phase", message.mission.return_phase);
         message.mission.grid_map_finalized =
             valueOr<bool>(*mission, "grid_map_finalized", message.mission.grid_map_finalized);
+        message.mission.grid_pose_visible =
+            valueOr<bool>(*mission, "grid_pose_visible", message.mission.grid_pose_visible);
+        message.mission.vertiport_return_active =
+            valueOr<bool>(*mission, "vertiport_return_active", message.mission.vertiport_return_active);
+        message.mission.vertiport_acquired =
+            valueOr<bool>(*mission, "vertiport_acquired", message.mission.vertiport_acquired);
+        message.mission.landing_success =
+            valueOr<bool>(*mission, "landing_success", message.mission.landing_success);
+        message.mission.mission_complete =
+            valueOr<bool>(*mission, "mission_complete", message.mission.mission_complete);
         message.mission.revisit_order =
             valueOr<std::string>(*mission, "revisit_order", message.mission.revisit_order);
         message.mission.revisit_target_id =

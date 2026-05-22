@@ -82,8 +82,15 @@ std::string formatVisionLog(
             pre << "  marker_revisit="
                 << (markerRevisitSucceeded(mission) ? "yes" : "no");
         }
-        pre << "\n"
-            << kDivider << "\n\n";
+        if (mission.return_active && !mission.return_phase.empty() &&
+            mission.return_phase != "none") {
+            pre << "  return=" << mission.return_phase;
+        }
+        pre << "\n";
+        if (mission.mission_complete && mission.landing_success) {
+            pre << "mission complete!\n";
+        }
+        pre << kDivider << "\n\n";
     }
     return pre.str() + formatVisionLog(frame, stats);
 }

@@ -78,6 +78,7 @@ private:
     std::string mission_heading_;       // "north"/"east"/"south"/"west"
     GridMapCoord mission_drone_coord_;
     bool has_mission_drone_coord_ = false;
+    bool hide_drone_arrow_ = false;
     // Cycle 25: marker registry mirrored from MissionTelemetry. Used to
     // render an 'M'-style mark at marker cells in place of the generic '+'.
     std::map<GridMapCoord, int, GridMapCoordLess> marker_cells_;  // coord -> id

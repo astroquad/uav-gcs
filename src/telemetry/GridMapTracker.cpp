@@ -211,11 +211,11 @@ std::string GridMapTracker::render() const
     // flips direction immediately after a turn completes, not at next commit).
     // Falls back to the latest committed node's arrival_heading.
     const bool use_mission_pos =
-        has_mission_drone_coord_ && has_mission_heading_;
+        !hide_drone_arrow_ && has_mission_drone_coord_ && has_mission_heading_;
     const GridMapCoord arrow_coord = use_mission_pos
         ? mission_drone_coord_
         : (has_current_ ? current_coord_ : GridMapCoord{});
-    const bool have_arrow = use_mission_pos || has_current_;
+    const bool have_arrow = !hide_drone_arrow_ && (use_mission_pos || has_current_);
     if (have_arrow) {
         std::string heading;
         if (has_mission_heading_) {
@@ -231,9 +231,13 @@ std::string GridMapTracker::render() const
     }
 
     std::ostringstream stream;
-    const GridMapCoord current = arrow_coord;
+    const GridMapCoord current = have_arrow
+        ? arrow_coord
+        : (has_current_ ? current_coord_ : GridMapCoord{});
     std::string heading_label;
-    if (has_mission_heading_) {
+    if (hide_drone_arrow_) {
+        heading_label = "off-grid";
+    } else if (has_mission_heading_) {
         heading_label = mission_heading_;
     } else {
         const auto found = nodes_.find(current);
@@ -241,9 +245,13 @@ std::string GridMapTracker::render() const
             ? std::string("unknown")
             : found->second.telemetry.arrival_heading;
     }
-    stream << "[grid-map] nodes=" << nodes_.size()
-           << " current=(" << current.x << ',' << current.y << ")"
-           << " heading=" << heading_label << "\n";
+    stream << "[grid-map] nodes=" << nodes_.size();
+    if (hide_drone_arrow_) {
+        stream << " current=(off-grid)";
+    } else {
+        stream << " current=(" << current.x << ',' << current.y << ")";
+    }
+    stream << " heading=" << heading_label << "\n";
     // Cycle 27: headingArrow() reverted to plain ASCII glyphs (^ > v <),
     // so the canvas can be streamed out byte-for-byte without any UTF-8
     // substitution.
@@ -256,6 +264,12 @@ std::string GridMapTracker::render() const
 void GridMapTracker::observeDronePosition(bool valid, double grid_offset_x, double grid_offset_y)
 {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (hide_drone_arrow_) {
+        has_drone_pos_ = false;
+        drone_offset_x_ = 0.0;
+        drone_offset_y_ = 0.0;
+        return;
+    }
     has_drone_pos_ = valid;
     drone_offset_x_ = valid ? grid_offset_x : 0.0;
     drone_offset_y_ = valid ? grid_offset_y : 0.0;
@@ -270,14 +284,6 @@ void GridMapTracker::observeMission(const protocol::MissionTelemetry& mission)
     if (mission.grid_map_finalized) {
         grid_map_finalized_ = true;
     }
-    // Live heading drives the arrow direction immediately after a turn.
-    if (mission.grid.valid && !mission.grid.heading.empty() &&
-        mission.grid.heading != "unknown") {
-        mission_heading_ = mission.grid.heading;
-        has_mission_heading_ = true;
-        mission_drone_coord_ = GridMapCoord{mission.grid.x, mission.grid.y};
-        has_mission_drone_coord_ = true;
-    }
     // Mirror discovered markers into a coord->id map so render() can stamp
     // a marker glyph at those cells. Vertiport is excluded (no grid coord
     // on that record anyway) so the start pad stays unmarked.
@@ -286,6 +292,22 @@ void GridMapTracker::observeMission(const protocol::MissionTelemetry& mission)
         if (!m.grid_valid) continue;
         if (m.id == vertiport_id) continue;
         marker_cells_[GridMapCoord{m.grid_x, m.grid_y}] = m.id;
+    }
+    if (!mission.grid_pose_visible) {
+        hide_drone_arrow_ = true;
+        has_mission_heading_ = false;
+        has_mission_drone_coord_ = false;
+        has_drone_pos_ = false;
+        return;
+    }
+    hide_drone_arrow_ = false;
+    // Live heading drives the arrow direction immediately after a turn.
+    if (mission.grid.valid && !mission.grid.heading.empty() &&
+        mission.grid.heading != "unknown") {
+        mission_heading_ = mission.grid.heading;
+        has_mission_heading_ = true;
+        mission_drone_coord_ = GridMapCoord{mission.grid.x, mission.grid.y};
+        has_mission_drone_coord_ = true;
     }
 }
 
@@ -308,6 +330,7 @@ void GridMapTracker::reset()
     mission_heading_.clear();
     has_mission_drone_coord_ = false;
     mission_drone_coord_ = {};
+    hide_drone_arrow_ = false;
     marker_cells_.clear();
     grid_map_finalized_ = false;
 }
