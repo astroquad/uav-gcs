@@ -1,10 +1,10 @@
 #include "app/AstroquadGcsApp.hpp"
 
-#include "network/UdpTelemetryReceiver.hpp"
+#include "app/TelemetryWorker.hpp"
+#include "app/VideoReceiveWorker.hpp"
 #include "overlay/IntersectionOverlay.hpp"
 #include "overlay/LineOverlay.hpp"
 #include "overlay/MarkerOverlay.hpp"
-#include "protocol/TelemetryMessage.hpp"
 #include "telemetry/GridMapTracker.hpp"
 #include "telemetry/MarkerTracker.hpp"
 #include "telemetry/TelemetryStore.hpp"
@@ -12,200 +12,18 @@
 #include "ui/VisionLogWindow.hpp"
 #include "ui/VideoWindow.hpp"
 #include "video/GcsDiscoveryBeacon.hpp"
-#include "video/UdpMjpegReceiver.hpp"
 
 #include <algorithm>
-#include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <iomanip>
 #include <iostream>
-#include <mutex>
-#include <optional>
 #include <sstream>
-#include <thread>
-#include <utility>
+#include <string>
 #include <vector>
 
 namespace gcs::app {
 namespace {
-
-class TelemetryThread {
-public:
-    bool start(
-        std::uint16_t port,
-        int timeout_ms,
-        telemetry::TelemetryStore& store,
-        telemetry::GridMapTracker& grid_map,
-        telemetry::MarkerTracker& marker_tracker)
-    {
-        if (!receiver_.open(port)) {
-            last_error_ = receiver_.lastError();
-            return false;
-        }
-
-        running_ = true;
-        worker_ = std::thread([this, timeout_ms, &store, &grid_map, &marker_tracker]() {
-            while (running_) {
-                std::string payload;
-                if (!receiver_.receive(payload, std::clamp(timeout_ms, 1, 100))) {
-                    if (receiver_.lastError() != "timeout") {
-                        std::lock_guard<std::mutex> lock(error_mutex_);
-                        last_error_ = receiver_.lastError();
-                    }
-                    continue;
-                }
-
-                const auto parsed = protocol::parseTelemetryJson(payload);
-                if (!parsed) {
-                    std::lock_guard<std::mutex> lock(error_mutex_);
-                    last_error_ = "dropped malformed telemetry JSON";
-                    continue;
-                }
-
-                {
-                    std::lock_guard<std::mutex> lock(stats_mutex_);
-                    stats_.observe(*parsed);
-                }
-                store.observe(*parsed);
-                // Mission may mark the map finalized at the start of marker
-                // revisit. Apply that before observing grid_node so a packet
-                // cannot add one last node after freeze.
-                grid_map.observeMission(parsed->mission);
-                grid_map.observe(parsed->vision.grid_node);
-                // Cycle 13: drive the heading arrow's sub-cell position from
-                // the drone's fractional progress since the last committed node.
-                grid_map.observeDronePosition(
-                    parsed->vision.drone_position.valid,
-                    parsed->vision.drone_position.grid_offset_x,
-                    parsed->vision.drone_position.grid_offset_y);
-                // Cycle 23: feed discovered-marker registry into MarkerTracker
-                // so the new side panel renders the id-sorted list.
-                marker_tracker.observe(parsed->mission);
-            }
-        });
-        return true;
-    }
-
-    void stop()
-    {
-        running_ = false;
-        if (worker_.joinable()) {
-            worker_.join();
-        }
-    }
-
-    protocol::TelemetryStats stats() const
-    {
-        std::lock_guard<std::mutex> lock(stats_mutex_);
-        return stats_;
-    }
-
-    std::string takeLastError()
-    {
-        std::lock_guard<std::mutex> lock(error_mutex_);
-        std::string output = std::move(last_error_);
-        last_error_.clear();
-        return output;
-    }
-
-private:
-    network::UdpTelemetryReceiver receiver_;
-    std::atomic<bool> running_ {false};
-    std::thread worker_;
-    mutable std::mutex stats_mutex_;
-    protocol::TelemetryStats stats_;
-    std::mutex error_mutex_;
-    std::string last_error_;
-};
-
-class VideoReceiveThread {
-public:
-    bool start(std::uint16_t port, int timeout_ms)
-    {
-        if (!receiver_.open(port)) {
-            last_error_ = receiver_.lastError();
-            return false;
-        }
-
-        running_ = true;
-        worker_ = std::thread([this, timeout_ms]() {
-            const int poll_timeout_ms = std::clamp(timeout_ms, 1, 50);
-            while (running_) {
-                auto frame = receiver_.receiveFrame(poll_timeout_ms);
-                {
-                    std::lock_guard<std::mutex> lock(stats_mutex_);
-                    stats_ = receiver_.stats();
-                }
-                if (frame) {
-                    std::lock_guard<std::mutex> lock(frame_mutex_);
-                    if (latest_frame_) {
-                        ++overwritten_frames_;
-                    }
-                    latest_frame_ = std::move(frame);
-                    continue;
-                }
-
-                if (receiver_.lastError() != "timeout") {
-                    std::lock_guard<std::mutex> lock(error_mutex_);
-                    last_error_ = receiver_.lastError();
-                }
-            }
-        });
-        return true;
-    }
-
-    void stop()
-    {
-        running_ = false;
-        if (worker_.joinable()) {
-            worker_.join();
-        }
-        receiver_.close();
-    }
-
-    std::optional<video::JpegFrame> takeLatestFrame()
-    {
-        std::lock_guard<std::mutex> lock(frame_mutex_);
-        if (!latest_frame_) {
-            return std::nullopt;
-        }
-        auto output = std::move(latest_frame_);
-        latest_frame_.reset();
-        return output;
-    }
-
-    video::UdpMjpegReceiverStats stats() const
-    {
-        std::lock_guard<std::mutex> lock(stats_mutex_);
-        return stats_;
-    }
-
-    std::uint64_t overwrittenFrames() const
-    {
-        std::lock_guard<std::mutex> lock(frame_mutex_);
-        return overwritten_frames_;
-    }
-
-    std::string takeLastError()
-    {
-        std::lock_guard<std::mutex> lock(error_mutex_);
-        std::string output = std::move(last_error_);
-        last_error_.clear();
-        return output;
-    }
-
-private:
-    video::UdpMjpegReceiver receiver_;
-    std::atomic<bool> running_ {false};
-    std::thread worker_;
-    mutable std::mutex frame_mutex_;
-    std::optional<video::JpegFrame> latest_frame_;
-    std::uint64_t overwritten_frames_ = 0;
-    mutable std::mutex stats_mutex_;
-    video::UdpMjpegReceiverStats stats_;
-    mutable std::mutex error_mutex_;
-    std::string last_error_;
-};
 
 std::string formatVideoStatsLine(
     const video::UdpMjpegReceiverStats& stats,
@@ -231,26 +49,26 @@ std::string formatVideoStatsLine(
 
 int AstroquadGcsApp::run(const AstroquadGcsOptions& options)
 {
-    VideoReceiveThread video_thread;
-    if (!video_thread.start(options.video_port, options.video_timeout_ms)) {
+    VideoReceiveWorker video_worker;
+    if (!video_worker.start(options.video_port, options.video_timeout_ms)) {
         std::cerr << "failed to open UDP video receiver on port "
-                  << options.video_port << ": " << video_thread.takeLastError() << "\n";
+                  << options.video_port << ": " << video_worker.takeLastError() << "\n";
         return 1;
     }
 
     telemetry::TelemetryStore telemetry_store;
     telemetry::GridMapTracker grid_map_tracker;
     telemetry::MarkerTracker marker_tracker;
-    TelemetryThread telemetry_thread;
-    if (!telemetry_thread.start(
+    TelemetryWorker telemetry_worker;
+    if (!telemetry_worker.start(
             options.telemetry_port,
             options.telemetry_timeout_ms,
             telemetry_store,
             grid_map_tracker,
             marker_tracker)) {
         std::cerr << "failed to open UDP telemetry receiver on port "
-                  << options.telemetry_port << ": " << telemetry_thread.takeLastError() << "\n";
-        video_thread.stop();
+                  << options.telemetry_port << ": " << telemetry_worker.takeLastError() << "\n";
+        video_worker.stop();
         return 1;
     }
 
@@ -276,7 +94,7 @@ int AstroquadGcsApp::run(const AstroquadGcsOptions& options)
     bool received_any_frame = false;
 
     while (true) {
-        const auto frame = video_thread.takeLatestFrame();
+        const auto frame = video_worker.takeLatestFrame();
         if (frame) {
             last_frame_time = std::chrono::steady_clock::now();
             received_any_frame = true;
@@ -319,12 +137,12 @@ int AstroquadGcsApp::run(const AstroquadGcsOptions& options)
             }
         }
 
-        const std::string video_error = video_thread.takeLastError();
+        const std::string video_error = video_worker.takeLastError();
         if (!video_error.empty()) {
             std::cerr << "video receive warning: " << video_error << "\n";
         }
 
-        const std::string telemetry_error = telemetry_thread.takeLastError();
+        const std::string telemetry_error = telemetry_worker.takeLastError();
         if (!telemetry_error.empty()) {
             std::cerr << "telemetry receive warning: " << telemetry_error << "\n";
         }
@@ -348,24 +166,24 @@ int AstroquadGcsApp::run(const AstroquadGcsOptions& options)
                 // with the "=== Mission ===" section before the per-frame
                 // vision dump.
                 auto detail = telemetry::formatVisionLog(
-                    *latest, marker_tracker.latestMission(), telemetry_thread.stats());
+                    *latest, marker_tracker.latestMission(), telemetry_worker.stats());
                 detail += formatVideoStatsLine(
-                    video_thread.stats(),
-                    video_thread.overwrittenFrames(),
+                    video_worker.stats(),
+                    video_worker.overwrittenFrames(),
                     display_fps);
                 if (!log_window.update(grid_text, markers_text, detail)) {
                     std::cout << grid_text << markers_text << detail;
                 }
             } else {
-                const auto stats = telemetry_thread.stats();
+                const auto stats = telemetry_worker.stats();
                 std::string detail =
                     "=== Network ===\n"
                     "[vision] no telemetry packets yet packets=" +
                     std::to_string(stats.received_packets) +
                     " dropped=" + std::to_string(stats.dropped_packets) + "\n";
                 detail += formatVideoStatsLine(
-                    video_thread.stats(),
-                    video_thread.overwrittenFrames(),
+                    video_worker.stats(),
+                    video_worker.overwrittenFrames(),
                     display_fps);
                 if (!log_window.update(grid_text, markers_text, detail)) {
                     std::cout << grid_text << markers_text << detail;
@@ -380,8 +198,8 @@ int AstroquadGcsApp::run(const AstroquadGcsOptions& options)
         }
     }
 
-    video_thread.stop();
-    telemetry_thread.stop();
+    video_worker.stop();
+    telemetry_worker.stop();
     return 0;
 }
 

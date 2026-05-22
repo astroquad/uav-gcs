@@ -19,7 +19,7 @@ struct Options {
 void printUsage()
 {
     std::cout
-        << "Usage: uav_gcs_video [options]\n\n"
+        << "Usage: uav-gcs-video [options]\n\n"
         << "Options:\n"
         << "  --config <dir>       Config directory containing network.toml/ui.toml\n"
         << "  --port <n>           Override video UDP port\n"

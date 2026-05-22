@@ -21,8 +21,8 @@ mission decision logic locally.
 | Executable | Role |
 |---|---|
 | `astroquad-gcs` | Primary current GCS UI: telemetry + optional video + overlays + vision/grid log. |
-| `uav_gcs` | Basic telemetry receiver / development probe. |
-| `uav_gcs_video` | Raw MJPEG video receiver only. |
+| `uav-gcs-telem` | Telemetry-only console receiver / development probe. |
+| `uav-gcs-video` | Raw MJPEG video receiver only. |
 | `mock_onboard`, `log_replayer` | Development tools. |
 
 Shared modules stay in libraries so the main GCS can grow without copying
@@ -63,15 +63,15 @@ Main GCS:
 Telemetry-only receiver:
 
 ```bash
-./build/uav_gcs --config config
+./build/uav-gcs-telem --config config
 ```
 
 Windows:
 
 ```powershell
 .\build\astroquad-gcs.exe --config config
-.\build\uav_gcs.exe --config config
-.\build\uav_gcs_video.exe --config config
+.\build\uav-gcs-telem.exe --config config
+.\build\uav-gcs-video.exe --config config
 ```
 
 With a multi-config generator the executables may be under `build\Release`.
@@ -167,7 +167,7 @@ Current tests cover:
 ## Troubleshooting
 
 - If telemetry packets never arrive, check Windows Defender Firewall inbound
-  UDP rules for `astroquad-gcs.exe` and `uav_gcs.exe`.
+  UDP rules for `astroquad-gcs.exe` and `uav-gcs-telem.exe`.
 - If video is missing but telemetry works, inspect onboard `[video]` counters.
   `video_sent=0`, `chunks_last=0`, and `last_bytes=0` mean video is disabled.
 - If GCS discovery/broadcast is blocked, pass `--gcs-ip <laptop-ip>` to the

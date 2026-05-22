@@ -1,7 +1,9 @@
+#include "app/AstroquadGcsApp.hpp"
 #include "common/NetworkConfig.hpp"
-#include "network/UdpTelemetryReceiver.hpp"
-#include "protocol/TelemetryMessage.hpp"
 
+#include <toml++/toml.hpp>
+
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -9,23 +11,24 @@
 namespace {
 
 struct Options {
-    std::string config_dir = "../config";
-    int count = 0;
-    int timeout_ms = 0;
-    bool print_raw = false;
+    std::string config_dir = "config";
+    int video_port_override = 0;
+    int telemetry_port_override = 0;
+    int video_timeout_ms = 0;
+    int marker_log_interval_ms = 0;
 };
 
 void printUsage()
 {
     std::cout
-        << "Usage: uav_gcs [options]\n"
-        << "\n"
+        << "Usage: astroquad-gcs [options]\n\n"
         << "Options:\n"
-        << "  --config <dir>       Config directory containing network.toml\n"
-        << "  --count <n>          Receive n telemetry packets, 0 means forever\n"
-        << "  --timeout-ms <n>     Override telemetry receive timeout\n"
-        << "  --raw                Print raw JSON payloads\n"
-        << "  -h, --help           Show this help\n";
+        << "  --config <dir>          Config directory containing network.toml/ui.toml\n"
+        << "  --video-port <n>        Override video UDP port\n"
+        << "  --telemetry-port <n>    Override telemetry UDP port\n"
+        << "  --timeout-ms <n>        Override video receive timeout\n"
+        << "  --marker-log-ms <n>     Override marker log print interval\n"
+        << "  -h, --help              Show this help\n";
 }
 
 int parseInt(const std::string& value, int fallback)
@@ -44,12 +47,14 @@ Options parseOptions(int argc, char** argv)
         const std::string arg = argv[i];
         if (arg == "--config" && i + 1 < argc) {
             options.config_dir = argv[++i];
-        } else if (arg == "--count" && i + 1 < argc) {
-            options.count = parseInt(argv[++i], options.count);
+        } else if (arg == "--video-port" && i + 1 < argc) {
+            options.video_port_override = parseInt(argv[++i], options.video_port_override);
+        } else if (arg == "--telemetry-port" && i + 1 < argc) {
+            options.telemetry_port_override = parseInt(argv[++i], options.telemetry_port_override);
         } else if (arg == "--timeout-ms" && i + 1 < argc) {
-            options.timeout_ms = parseInt(argv[++i], options.timeout_ms);
-        } else if (arg == "--raw") {
-            options.print_raw = true;
+            options.video_timeout_ms = parseInt(argv[++i], options.video_timeout_ms);
+        } else if (arg == "--marker-log-ms" && i + 1 < argc) {
+            options.marker_log_interval_ms = parseInt(argv[++i], options.marker_log_interval_ms);
         } else if (arg == "-h" || arg == "--help") {
             printUsage();
             std::exit(0);
@@ -62,70 +67,57 @@ Options parseOptions(int argc, char** argv)
     return options;
 }
 
+std::string joinConfigPath(const std::string& config_dir, const std::string& filename)
+{
+    if (config_dir.empty()) {
+        return "config/" + filename;
+    }
+    const char last = config_dir.back();
+    if (last == '/' || last == '\\') {
+        return config_dir + filename;
+    }
+    return config_dir + "/" + filename;
+}
+
+void loadUiConfig(const std::string& config_dir, gcs::app::AstroquadGcsOptions& options)
+{
+    try {
+        const auto table = toml::parse_file(joinConfigPath(config_dir, "ui.toml"));
+        if (const auto video_window = table["video_window"]) {
+            options.title = video_window["title"].value_or(options.title);
+            options.video_timeout_ms =
+                video_window["timeout_ms"].value_or(options.video_timeout_ms);
+        }
+    } catch (const toml::parse_error&) {
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv)
 {
     const Options options = parseOptions(argc, argv);
-    auto config = gcs::common::loadNetworkConfig(options.config_dir);
-    if (options.timeout_ms > 0) {
-        config.telemetry_timeout_ms = options.timeout_ms;
+    const auto network_config = gcs::common::loadNetworkConfig(options.config_dir);
+
+    gcs::app::AstroquadGcsOptions app_options;
+    app_options.video_port = network_config.video_port;
+    app_options.telemetry_port = network_config.telemetry_port;
+    app_options.telemetry_timeout_ms = network_config.telemetry_timeout_ms;
+    loadUiConfig(options.config_dir, app_options);
+
+    if (options.video_port_override > 0) {
+        app_options.video_port = static_cast<std::uint16_t>(options.video_port_override);
+    }
+    if (options.telemetry_port_override > 0) {
+        app_options.telemetry_port = static_cast<std::uint16_t>(options.telemetry_port_override);
+    }
+    if (options.video_timeout_ms > 0) {
+        app_options.video_timeout_ms = options.video_timeout_ms;
+    }
+    if (options.marker_log_interval_ms > 0) {
+        app_options.marker_log_interval_ms = options.marker_log_interval_ms;
     }
 
-    gcs::network::UdpTelemetryReceiver receiver;
-    if (!receiver.open(config.telemetry_port)) {
-        std::cerr << "failed to open telemetry receiver on UDP port "
-                  << config.telemetry_port << ": " << receiver.lastError() << "\n";
-        return 1;
-    }
-
-    std::cout << "uav_gcs telemetry receiver\n"
-              << "  listen UDP port: " << config.telemetry_port << "\n"
-              << "  timeout_ms: " << config.telemetry_timeout_ms << "\n"
-              << "  count: " << (options.count == 0 ? std::string("forever") : std::to_string(options.count))
-              << "\n";
-
-    int received_count = 0;
-    gcs::protocol::TelemetryStats stats;
-    while (options.count == 0 || received_count < options.count) {
-        std::string payload;
-        if (!receiver.receive(payload, config.telemetry_timeout_ms)) {
-            if (receiver.lastError() == "timeout") {
-                std::cout << "telemetry timeout after "
-                          << config.telemetry_timeout_ms << " ms\n";
-                continue;
-            }
-            std::cerr << "telemetry receive failed: " << receiver.lastError() << "\n";
-            return 1;
-        }
-
-        const auto message = gcs::protocol::parseTelemetryJson(payload);
-        if (!message) {
-            std::cerr << "dropped malformed telemetry payload\n";
-            if (options.print_raw) {
-                std::cerr << payload << "\n";
-            }
-            continue;
-        }
-        stats.observe(*message);
-
-        std::cout << "TELEMETRY"
-                  << " seq=" << message->seq
-                  << " timestamp_ms=" << message->timestamp_ms
-                  << " state=" << (message->mission_state.empty() ? "UNKNOWN" : message->mission_state)
-                  << " camera=" << (message->camera.status.empty() ? "UNKNOWN" : message->camera.status)
-                  << " frame=" << message->camera.width << "x" << message->camera.height
-                  << " fps=" << message->camera.fps
-                  << " grid=" << message->grid.row << "," << message->grid.col
-                  << " dropped=" << stats.dropped_packets
-                  << " duplicate=" << stats.duplicate_packets
-                  << " out_of_order=" << stats.out_of_order_packets
-                  << "\n";
-        if (options.print_raw) {
-            std::cout << payload << "\n";
-        }
-        ++received_count;
-    }
-
-    return 0;
+    gcs::app::AstroquadGcsApp app;
+    return app.run(app_options);
 }

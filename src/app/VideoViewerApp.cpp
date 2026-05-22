@@ -25,7 +25,7 @@ int VideoViewerApp::run(const VideoViewerOptions& options)
     ui::VideoWindow window(options.title);
     window.showStatus("waiting for video stream...");
 
-    std::cout << "uav_gcs_video\n"
+    std::cout << "uav-gcs-video\n"
               << "  listen UDP port: " << options.port << "\n"
               << "  timeout_ms: " << options.timeout_ms << "\n"
               << "  press q or ESC in the video window to exit\n";

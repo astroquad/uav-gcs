@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(uav_gcs LANGUAGES CXX)
+project(astroquad_gcs LANGUAGES CXX)
 
 if(POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
@@ -87,7 +87,9 @@ endif()
 
 if(GCS_VIDEO_UI_SOURCE)
     add_library(gcs_video STATIC
+        src/app/TelemetryWorker.cpp
         src/app/VideoViewerApp.cpp
+        src/app/VideoReceiveWorker.cpp
         src/app/AstroquadGcsApp.cpp
         src/overlay/IntersectionOverlay.cpp
         src/overlay/LineOverlay.cpp
@@ -108,23 +110,22 @@ if(GCS_VIDEO_UI_SOURCE)
         target_link_libraries(gcs_video PUBLIC ws2_32 user32)
     endif()
 
-    add_executable(uav_gcs_video
+    add_executable(uav-gcs-video
         src/video_main.cpp
     )
-    target_link_libraries(uav_gcs_video PRIVATE gcs_core gcs_video)
+    target_link_libraries(uav-gcs-video PRIVATE gcs_core gcs_video)
 
-    add_executable(astroquad_gcs
-        src/astroquad_gcs_main.cpp
+    add_executable(astroquad-gcs
+        src/main.cpp
     )
-    set_target_properties(astroquad_gcs PROPERTIES OUTPUT_NAME "astroquad-gcs")
-    target_link_libraries(astroquad_gcs PRIVATE gcs_video gcs_core)
+    target_link_libraries(astroquad-gcs PRIVATE gcs_video gcs_core)
 endif()
 
-add_executable(uav_gcs
-    src/main.cpp
+add_executable(uav-gcs-telem
+    src/telemetry_main.cpp
 )
 
-target_link_libraries(uav_gcs PRIVATE gcs_core)
+target_link_libraries(uav-gcs-telem PRIVATE gcs_core)
 
 option(BUILD_TOOLS "Build GCS development tools" ON)
 if(BUILD_TOOLS)
