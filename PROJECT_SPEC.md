@@ -117,7 +117,7 @@ Raspberry Pi 4 + IMX519 + Pixhawk1
 - GCS는 node id/coordinate 중복을 무시한다.
 - GCS는 marker 발견을 표시할 뿐 marker commit 여부를 최종 판단하지 않는다.
 - 현재 richer mission object는 telemetry schema에 준비되어 있지만
-  `VisionDebugPublisher` path에서 아직 채워지지 않는다. Grid state detail은
+  `GcsTelemetryPublisher` path에서 아직 채워지지 않는다. Grid state detail은
   onboard console log가 더 정확하다.
 
 ## 7. UI 구조
