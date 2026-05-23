@@ -89,7 +89,7 @@ Onboard examples:
 ```bash
 ./build/vision_debug_node --config config --line-only --line-mode dark_on_light --video
 ./build/line_follow_node --config config --target sitl --vision gazebo --line-mode dark_on_light --video --gcs-ip <gcs-ip>
-./build/grid_mission_node --config config --target sitl --vision gazebo \
+./build/astroquad-onboard --config config --target sitl --vision gazebo \
   --world grid --line-mode dark_on_light --marker-count 4 \
   --video --gcs-ip <gcs-ip>
 ```
@@ -112,10 +112,11 @@ Expected log groups:
 - `grid_node` local coordinate events and `[grid-map]` ASCII map.
 
 The GCS grid map consumes `vision.grid_node` only after onboard commits a node.
-`grid_mission_node` intentionally resends the latest committed node every frame
-for UDP-loss tolerance; GCS deduplicates it. `vision.drone_position` is parsed
-and stored, but the current ASCII map renders the heading arrow at the latest
-committed node rather than at a fractional sub-cell position.
+`astroquad-onboard` and the `grid_mission_node` compatibility target
+intentionally resend the latest committed node every frame for UDP-loss
+tolerance; GCS deduplicates it. `vision.drone_position` is parsed and stored,
+but the current ASCII map renders the heading arrow at the latest committed
+node rather than at a fractional sub-cell position.
 
 If the camera window says `waiting for video stream...` while logs update, the
 onboard process is probably running telemetry-only. Add `--video` to enable raw
@@ -140,7 +141,7 @@ bash ~/astroquad/uav-onboard/scripts/grid_arena_test.sh
 
 WINDOWS_GCS_IP="$(ip route | awk '/default/ {print $3; exit}')"
 cd ~/astroquad/uav-onboard
-./build/grid_mission_node --config config --target sitl --vision gazebo \
+./build/astroquad-onboard --config config --target sitl --vision gazebo \
   --world grid --line-mode dark_on_light --marker-count 4 \
   --video --gcs-ip "$WINDOWS_GCS_IP"
 ```
