@@ -128,6 +128,8 @@ std::optional<TelemetryMessage> parseTelemetryJson(const std::string& payload)
         message.mission.state = message.mission_state;
         message.mission.control_intent =
             valueOr<std::string>(*mission, "control_intent", message.mission.control_intent);
+        message.mission.mission_elapsed_ms =
+            valueOr<std::int64_t>(*mission, "mission_elapsed_ms", message.mission.mission_elapsed_ms);
         message.mission.markers_expected =
             valueOr<int>(*mission, "markers_expected", message.mission.markers_expected);
         message.mission.snake_complete =

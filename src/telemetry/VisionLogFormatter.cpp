@@ -64,6 +64,20 @@ bool markerRevisitSucceeded(const protocol::MissionTelemetry& mission)
 
 namespace {
 constexpr const char* kDivider = "------------------------------------------------------------";
+
+// Format a millisecond mission timer as MM:SS.s (mm can exceed 59).
+std::string formatMissionClock(std::int64_t elapsed_ms)
+{
+    if (elapsed_ms < 0) elapsed_ms = 0;
+    const int total_tenths = static_cast<int>(elapsed_ms / 100);
+    const int minutes = total_tenths / 600;
+    const int seconds = (total_tenths / 10) % 60;
+    const int tenths = total_tenths % 10;
+    std::ostringstream clock;
+    clock << std::setw(2) << std::setfill('0') << minutes << ':'
+          << std::setw(2) << std::setfill('0') << seconds << '.' << tenths;
+    return clock.str();
+}
 }
 
 std::string formatVisionLog(
@@ -74,6 +88,7 @@ std::string formatVisionLog(
     std::ostringstream pre;
     if (mission.present) {
         pre << "=== Mission ===\n"
+            << "elapsed=" << formatMissionClock(mission.mission_elapsed_ms) << "\n"
             << "state=" << (mission.state.empty() ? "(unknown)" : mission.state)
             << "  intent=" << (mission.control_intent.empty() ? "(unknown)" : mission.control_intent) << "\n"
             << "markers=" << mission.markers_found.size() << "/" << mission.markers_expected

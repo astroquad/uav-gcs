@@ -239,6 +239,8 @@ struct MissionTelemetry {
     bool present = false;
     std::string state;
     std::string control_intent;
+    // Monotonic mission-elapsed time (ms) since mission start, from onboard.
+    std::int64_t mission_elapsed_ms = 0;
     int markers_expected = 0;
     bool snake_complete = false;
     bool revisit_active = false;

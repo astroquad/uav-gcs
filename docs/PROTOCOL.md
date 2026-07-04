@@ -1,6 +1,6 @@
 # Astroquad Onboard-GCS Protocol
 
-Version: v1.9
+Version: v1.10
 Last updated: 2026-07-04
 This file must stay identical in `uav-onboard/docs/PROTOCOL.md` and `uav-gcs/docs/PROTOCOL.md`.
 
@@ -272,6 +272,7 @@ Reserved richer shape:
     "state": "SNAKE_FORWARD",
     "control_intent": "fwd_blind",
     "phase_elapsed_ms": 1250,
+    "mission_elapsed_ms": 18400,
     "target_altitude_m": 2.0,
     "altitude_off_pad_confirmed": true,
     "grid": {
@@ -417,3 +418,4 @@ receive a `CMD_ACK` telemetry response when implemented.
 | v1.7 | 2026-05-14 | No schema change; documented runtime source profiles. |
 | v1.8 | 2026-05-21 | Added `vision.drone_position`, clarified committed-node resend semantics, documented grid mission staging and current mission telemetry limits. |
 | v1.9 | 2026-07-04 | No schema change; hardware examples updated to the upgraded platform (Raspberry Pi 5 + IMX296 mono global-shutter, frames grayscale end-to-end), command channel marked explicitly as documented-only/future work. |
+| v1.10 | 2026-07-05 | Added `mission.mission_elapsed_ms` (GCS mission timer); `markers_found[].first_seen_s`/`revisited_s` are frozen mission-elapsed snapshots (fixed upward drift). Backward compatible; `protocol_version` stays `1`. |
