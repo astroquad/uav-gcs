@@ -80,7 +80,7 @@ Wi-Fi / LAN
   ├─ video UDP 5600: onboard -> GCS, optional debug
   └─ discovery UDP 5601: GCS -> LAN broadcast
 
-Raspberry Pi 4 + IMX519 + Pixhawk1
+Raspberry Pi 5 + IMX296 mono GS camera + Pixhawk 6C Mini
   └─ uav-onboard
        ├─ vision / mission / MAVLink / safety
        └─ telemetry / debug video sender
@@ -102,7 +102,7 @@ Raspberry Pi 4 + IMX519 + Pixhawk1
 
 ## 6. Grid Mission 관제 기준
 
-`grid_mission_node`는 현재 다음 telemetry를 GCS에 보낸다.
+`astroquad-onboard`는 현재 다음 telemetry를 GCS에 보낸다.
 
 - `debug.note = "grid_mission"`
 - vision line/intersection/marker metadata
@@ -112,7 +112,7 @@ Raspberry Pi 4 + IMX519 + Pixhawk1
 
 주의:
 
-- `grid_mission_node`가 resending하는 `vision.grid_node`는 candidate가 아니라
+- `astroquad-onboard`가 resending하는 `vision.grid_node`는 candidate가 아니라
   onboard mission이 승인한 최신 committed node다.
 - GCS는 node id/coordinate 중복을 무시한다.
 - GCS는 marker 발견을 표시할 뿐 marker commit 여부를 최종 판단하지 않는다.
@@ -163,7 +163,7 @@ framework is committed in current code.
 - `uav-onboard/docs/PROTOCOL.md`
 - `uav-gcs/docs/PROTOCOL.md`
 
-현재 문서 version은 v1.8이고 JSON top-level `protocol_version`은 integer `1`이다.
+현재 문서 version은 v1.9이고 JSON top-level `protocol_version`은 integer `1`이다.
 
 Parser requirements:
 

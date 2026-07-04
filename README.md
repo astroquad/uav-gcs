@@ -112,8 +112,7 @@ Expected log groups:
 - `grid_node` local coordinate events and `[grid-map]` ASCII map.
 
 The GCS grid map consumes `vision.grid_node` only after onboard commits a node.
-`astroquad-onboard` and the `grid_mission_node` compatibility target
-intentionally resend the latest committed node every frame for UDP-loss
+`astroquad-onboard` intentionally resends the latest committed node every frame for UDP-loss
 tolerance; GCS deduplicates it. `vision.drone_position` is parsed and stored,
 but the current ASCII map renders the heading arrow at the latest committed
 node rather than at a fractional sub-cell position.
