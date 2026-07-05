@@ -12,40 +12,18 @@
 #include "ui/VisionLogWindow.hpp"
 #include "ui/VideoWindow.hpp"
 #include "video/GcsDiscoveryBeacon.hpp"
+#include "video/VideoRxStatsFormat.hpp"
 
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
-#include <iomanip>
 #include <iostream>
-#include <sstream>
 #include <string>
 #include <vector>
 
 namespace gcs::app {
-namespace {
 
-std::string formatVideoStatsLine(
-    const video::UdpMjpegReceiverStats& stats,
-    std::uint64_t overwritten_frames,
-    double display_fps)
-{
-    std::ostringstream stream;
-    stream << std::fixed << std::setprecision(1)
-           << "[video-rx] display_fps=" << display_fps
-           << " packets=" << stats.packets_received
-           << " completed=" << stats.completed_frames
-           << " incomplete=" << stats.incomplete_frames
-           << " malformed=" << stats.malformed_packets
-           << " old_packets=" << stats.old_packets
-           << " mismatch_resets=" << stats.chunk_mismatch_resets
-           << " latest_overwritten=" << overwritten_frames
-           << " last_chunks=" << stats.last_chunk_count
-           << " last_bytes=" << stats.last_frame_bytes << "\n";
-    return stream.str();
-}
-
-} // namespace
+using video::formatVideoStatsLine;
 
 int AstroquadGcsApp::run(const AstroquadGcsOptions& options)
 {

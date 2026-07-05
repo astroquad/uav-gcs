@@ -3,6 +3,7 @@
 #include "ui/VideoWindow.hpp"
 #include "video/GcsDiscoveryBeacon.hpp"
 #include "video/UdpMjpegReceiver.hpp"
+#include "video/VideoRxStatsFormat.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -31,6 +32,8 @@ int VideoViewerApp::run(const VideoViewerOptions& options)
               << "  press q or ESC in the video window to exit\n";
 
     auto last_frame_time = std::chrono::steady_clock::now();
+    auto last_stats_time = std::chrono::steady_clock::now();
+    int displayed_frames_in_window = 0;
     bool received_any_frame = false;
     while (true) {
         const int poll_timeout_ms = std::clamp(options.timeout_ms, 1, 50);
@@ -40,6 +43,8 @@ int VideoViewerApp::run(const VideoViewerOptions& options)
             received_any_frame = true;
             if (!window.showFrame(*frame)) {
                 std::cerr << "video display warning: failed to decode JPEG frame\n";
+            } else {
+                ++displayed_frames_in_window;
             }
         } else if (receiver.lastError() == "timeout") {
             const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -50,6 +55,17 @@ int VideoViewerApp::run(const VideoViewerOptions& options)
             }
         } else {
             std::cerr << "video receive warning: " << receiver.lastError() << "\n";
+        }
+
+        const auto now = std::chrono::steady_clock::now();
+        const auto stats_elapsed =
+            std::chrono::duration_cast<std::chrono::milliseconds>(now - last_stats_time);
+        if (stats_elapsed.count() >= 2000) {
+            const double display_fps = displayed_frames_in_window * 1000.0 /
+                static_cast<double>(stats_elapsed.count());
+            std::cout << video::formatVideoStatsLine(receiver.stats(), 0, display_fps);
+            displayed_frames_in_window = 0;
+            last_stats_time = now;
         }
 
         if (window.shouldClose(1)) {
