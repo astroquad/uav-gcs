@@ -12,6 +12,13 @@ add_executable(test_video_reassembler
 target_include_directories(test_video_reassembler PRIVATE ../src)
 add_test(NAME video_reassembler COMMAND test_video_reassembler)
 
+add_executable(test_telemetry_reassembler
+    test_telemetry_reassembler.cpp
+)
+target_include_directories(test_telemetry_reassembler PRIVATE ../src)
+target_link_libraries(test_telemetry_reassembler PRIVATE gcs_core)
+add_test(NAME telemetry_reassembler COMMAND test_telemetry_reassembler)
+
 if(TARGET gcs_video)
     add_executable(test_line_overlay
         test_line_overlay.cpp

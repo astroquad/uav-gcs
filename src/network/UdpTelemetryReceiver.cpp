@@ -1,6 +1,7 @@
 #include "network/UdpTelemetryReceiver.hpp"
 
 #include <array>
+#include <chrono>
 #include <cstring>
 
 #ifdef _WIN32
@@ -104,53 +105,77 @@ bool UdpTelemetryReceiver::receive(std::string& payload, int timeout_ms)
         return false;
     }
 
-    fd_set read_set;
-    FD_ZERO(&read_set);
+    const auto deadline = std::chrono::steady_clock::now() +
+        std::chrono::milliseconds(timeout_ms);
+    while (true) {
+        const auto remaining = std::chrono::duration_cast<std::chrono::microseconds>(
+            deadline - std::chrono::steady_clock::now());
+        if (remaining.count() <= 0) {
+            last_error_ = "timeout";
+            return false;
+        }
+
+        fd_set read_set;
+        FD_ZERO(&read_set);
 #ifdef _WIN32
-    FD_SET(static_cast<SOCKET>(socket_), &read_set);
+        FD_SET(static_cast<SOCKET>(socket_), &read_set);
 #else
-    FD_SET(static_cast<int>(socket_), &read_set);
+        FD_SET(static_cast<int>(socket_), &read_set);
 #endif
 
-    timeval timeout {};
-    timeout.tv_sec = timeout_ms / 1000;
-    timeout.tv_usec = (timeout_ms % 1000) * 1000;
+        timeval timeout {};
+        timeout.tv_sec = static_cast<long>(remaining.count() / 1000000);
+        timeout.tv_usec = static_cast<long>(remaining.count() % 1000000);
 
-    const int ready = select(
-        static_cast<int>(socket_) + 1,
-        &read_set,
-        nullptr,
-        nullptr,
-        &timeout);
-    if (ready == 0) {
-        last_error_ = "timeout";
-        return false;
-    }
-    if (ready < 0) {
-        last_error_ = socketErrorString();
-        return false;
-    }
+        const int ready = select(
+            static_cast<int>(socket_) + 1,
+            &read_set,
+            nullptr,
+            nullptr,
+            &timeout);
+        if (ready == 0) {
+            last_error_ = "timeout";
+            return false;
+        }
+        if (ready < 0) {
+            last_error_ = socketErrorString();
+            return false;
+        }
 
-    std::array<char, 8192> buffer {};
-    const int received = recvfrom(
+        // Sized for legacy unchunked JSON; AQT1 chunks are far smaller.
+        std::array<char, 8192> buffer {};
+        const int received = recvfrom(
 #ifdef _WIN32
-        static_cast<SOCKET>(socket_),
+            static_cast<SOCKET>(socket_),
 #else
-        static_cast<int>(socket_),
+            static_cast<int>(socket_),
 #endif
-        buffer.data(),
-        static_cast<int>(buffer.size() - 1),
-        0,
-        nullptr,
-        nullptr);
-    if (received < 0) {
-        last_error_ = socketErrorString();
-        return false;
-    }
+            buffer.data(),
+            static_cast<int>(buffer.size() - 1),
+            0,
+            nullptr,
+            nullptr);
+        if (received < 0) {
+            last_error_ = socketErrorString();
+            return false;
+        }
 
-    payload.assign(buffer.data(), static_cast<std::size_t>(received));
-    last_error_.clear();
-    return true;
+        auto message = reassembler_.acceptDatagram(
+            reinterpret_cast<const std::uint8_t*>(buffer.data()),
+            static_cast<std::size_t>(received));
+        if (message) {
+            payload = std::move(*message);
+            last_error_.clear();
+            return true;
+        }
+        // Partial chunk (or malformed datagram): keep waiting for the rest
+        // of the message until the deadline.
+    }
+}
+
+TelemetryReassemblerStats UdpTelemetryReceiver::reassemblerStats() const
+{
+    return reassembler_.stats();
 }
 
 std::string UdpTelemetryReceiver::lastError() const

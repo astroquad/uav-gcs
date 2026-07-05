@@ -54,10 +54,12 @@ target_include_directories(gcs_dependencies INTERFACE
 
 add_library(gcs_core STATIC
     src/common/NetworkConfig.cpp
+    src/network/TelemetryReassembler.cpp
     src/network/UdpTelemetryReceiver.cpp
     src/protocol/TelemetryMessage.cpp
     src/telemetry/GridMapTracker.cpp
     src/telemetry/MarkerTracker.cpp
+    src/video/VideoPacket.cpp
 )
 
 target_include_directories(gcs_core PUBLIC
@@ -101,11 +103,10 @@ if(GCS_VIDEO_UI_SOURCE)
         src/video/GcsDiscoveryBeacon.cpp
         src/video/JpegFrameReassembler.cpp
         src/video/UdpMjpegReceiver.cpp
-        src/video/VideoPacket.cpp
         ${GCS_VIDEO_UI_SOURCE}
     )
     target_include_directories(gcs_video PUBLIC src)
-    target_link_libraries(gcs_video PUBLIC ${GCS_VIDEO_LIBS})
+    target_link_libraries(gcs_video PUBLIC gcs_core ${GCS_VIDEO_LIBS})
     if(WIN32)
         target_link_libraries(gcs_video PUBLIC ws2_32 user32)
     endif()
