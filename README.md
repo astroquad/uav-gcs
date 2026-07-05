@@ -164,10 +164,42 @@ Current tests cover:
 - Line and intersection overlay primitive generation.
 - Grid map tracker dedup/edge rendering.
 
+## Tailscale / Windows Firewall
+
+The onboard Pi (`100.101.84.47`) reaches this GCS laptop (`100.85.239.73`)
+over Tailscale. Windows commonly categorizes the Tailscale interface under
+the **Public** firewall profile, so allow rules created earlier for a LAN
+(Private profile) stop matching and every inbound UDP datagram is silently
+dropped before it reaches the GCS socket — telemetry and video both show
+nothing while the onboard side reports successful sends.
+
+One-time setup (elevated PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_windows_firewall.ps1
+```
+
+The script creates idempotent inbound allow rules for UDP 14550 (telemetry)
+and UDP 5600 (video) across all profiles.
+
+If packets still do not arrive:
+
+- Verify the tunnel both ways: `tailscale ping <pi-tailscale-ip>` here and
+  `tailscale ping <laptop-tailscale-ip>` on the Pi.
+- Confirm the rules cover the active profile:
+  `netsh advfirewall monitor show currentprofile` and
+  `Get-NetFirewallRule -DisplayName "Astroquad GCS*"`.
+- Watch the `[video-rx]` stats line from `uav-gcs-video`: `packets=0` means
+  datagrams never reach the socket (firewall/routing); `packets>0` with
+  `completed=0` means chunk loss or reassembly issues.
+- As a last resort, capture on the Tailscale interface with `pktmon` or
+  Wireshark to see whether datagrams arrive at the adapter at all.
+
 ## Troubleshooting
 
 - If telemetry packets never arrive, check Windows Defender Firewall inbound
-  UDP rules for `astroquad-gcs.exe` and `uav-gcs-telem.exe`.
+  UDP rules for `astroquad-gcs.exe` and `uav-gcs-telem.exe`, or run
+  `scripts\setup_windows_firewall.ps1` (see the Tailscale section above).
 - If video is missing but telemetry works, inspect onboard `[video]` counters.
   `video_sent=0`, `chunks_last=0`, and `last_bytes=0` mean video is disabled.
 - If GCS discovery/broadcast is blocked, pass `--gcs-ip <laptop-ip>` to the
