@@ -20,9 +20,9 @@ mission decision logic locally.
 
 | Executable | Role |
 |---|---|
-| `astroquad-gcs` | Primary current GCS UI: telemetry + optional video + overlays + vision/grid log. |
+| `astroquad-gcs` | Primary current GCS UI: telemetry + optional video + overlays + vision/grid log. **Use this for normal operation** — it is the only executable that draws line/intersection/marker overlays. |
 | `uav-gcs-telem` | Telemetry-only console receiver / development probe. |
-| `uav-gcs-video` | Raw MJPEG video receiver only. |
+| `uav-gcs-video` | Raw MJPEG video receiver only — a transport smoke tool. It has no telemetry receiver, so it never draws overlays by design. |
 | `mock_onboard`, `log_replayer` | Development tools. |
 
 Shared modules stay in libraries so the main GCS can grow without copying
