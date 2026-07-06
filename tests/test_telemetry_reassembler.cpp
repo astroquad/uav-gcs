@@ -1,3 +1,7 @@
+// Tests are assert-based: keep assert() active even in Release
+// builds (CMake adds -DNDEBUG there, which silently no-ops all checks).
+#undef NDEBUG
+
 #include "network/TelemetryReassembler.hpp"
 #include "video/VideoPacket.hpp"
 
@@ -99,9 +103,16 @@ int main()
         assert(*message == payload_b);
         assert(reassembler.stats().incomplete_messages == 1);
 
-        // A late chunk from the abandoned message counts as old.
+        // After a completion the reassembler resets, so a late chunk from
+        // the abandoned message starts a new partial (not counted old) and
+        // is abandoned again by the next newer message.
         assert(!accept(reassembler, message_a[1]));
-        assert(reassembler.stats().old_packets == 1);
+        assert(reassembler.stats().old_packets == 0);
+        const auto message_c = buildChunkedDatagrams(makePayload(1400), 12, 3);
+        assert(!accept(reassembler, message_c[0]));
+        const auto completed_c = accept(reassembler, message_c[1]);
+        assert(completed_c);
+        assert(reassembler.stats().incomplete_messages == 2);
     }
 
     // Malformed datagrams are rejected and counted.
@@ -130,6 +141,21 @@ int main()
         const auto message = accept(reassembler, datagrams[1]);
         assert(message);
         assert(*message == payload);
+    }
+
+    // Sender restart: a large message_id regression while a partial message
+    // is pending starts a new stream instead of rejecting chunks forever.
+    {
+        TelemetryReassembler reassembler;
+        const std::string payload = makePayload(1400);
+        const auto before = buildChunkedDatagrams(makePayload(2000), 500000, 1);
+        const auto after = buildChunkedDatagrams(payload, 3, 2);
+        assert(!accept(reassembler, before[0]));
+        assert(!accept(reassembler, after[0]));
+        const auto message = accept(reassembler, after[1]);
+        assert(message);
+        assert(*message == payload);
+        assert(reassembler.stats().sender_restarts == 1);
     }
 
     return 0;

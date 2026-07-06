@@ -70,6 +70,7 @@ int AstroquadGcsApp::run(const AstroquadGcsOptions& options)
     int displayed_frames_in_window = 0;
     double display_fps = 0.0;
     bool received_any_frame = false;
+    std::uint64_t last_video_packets = 0;
 
     while (true) {
         const auto frame = video_worker.takeLatestFrame();
@@ -145,16 +146,29 @@ int AstroquadGcsApp::run(const AstroquadGcsOptions& options)
             >= options.marker_log_interval_ms) {
             const auto grid_text = grid_map_tracker.render();
             const auto markers_text = marker_tracker.render();
+            const auto video_stats = video_worker.stats();
+            std::string video_line = formatVideoStatsLine(
+                video_stats,
+                video_worker.overwrittenFrames(),
+                display_fps);
+            // A frozen packet counter means datagrams stopped reaching the
+            // socket entirely (sender stalled, tunnel down, firewall) —
+            // distinct from chunk loss, where packets grow but completed
+            // does not.
+            if (video_stats.packets_received > 0 &&
+                video_stats.packets_received == last_video_packets) {
+                video_line +=
+                    "[video-rx] WARNING: no packets since last report - "
+                    "check onboard sender / tailscale ping\n";
+            }
+            last_video_packets = video_stats.packets_received;
             if (const auto latest = telemetry_store.latest()) {
                 // Cycle 23: mission-aware overload so the detail panel leads
                 // with the "=== Mission ===" section before the per-frame
                 // vision dump.
                 auto detail = telemetry::formatVisionLog(
                     *latest, marker_tracker.latestMission(), telemetry_worker.stats());
-                detail += formatVideoStatsLine(
-                    video_worker.stats(),
-                    video_worker.overwrittenFrames(),
-                    display_fps);
+                detail += video_line;
                 if (!log_window.update(grid_text, markers_text, detail)) {
                     std::cout << grid_text << markers_text << detail;
                 }
@@ -165,10 +179,7 @@ int AstroquadGcsApp::run(const AstroquadGcsOptions& options)
                     "[vision] no telemetry packets yet packets=" +
                     std::to_string(stats.received_packets) +
                     " dropped=" + std::to_string(stats.dropped_packets) + "\n";
-                detail += formatVideoStatsLine(
-                    video_worker.stats(),
-                    video_worker.overwrittenFrames(),
-                    display_fps);
+                detail += video_line;
                 if (!log_window.update(grid_text, markers_text, detail)) {
                     std::cout << grid_text << markers_text << detail;
                 }
