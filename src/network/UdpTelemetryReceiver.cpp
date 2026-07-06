@@ -94,6 +94,24 @@ bool UdpTelemetryReceiver::open(std::uint16_t port)
         return false;
     }
 
+    // Telemetry arrives as chunk bursts per message; enlarge the receive
+    // buffer beyond the OS default so a brief consumer stall does not drop
+    // chunks. Best-effort: a failed enlargement is not fatal.
+    const int receive_buffer_bytes = 1 << 20;
+    (void)setsockopt(
+#ifdef _WIN32
+        static_cast<SOCKET>(socket_),
+        SOL_SOCKET,
+        SO_RCVBUF,
+        reinterpret_cast<const char*>(&receive_buffer_bytes),
+#else
+        static_cast<int>(socket_),
+        SOL_SOCKET,
+        SO_RCVBUF,
+        &receive_buffer_bytes,
+#endif
+        sizeof(receive_buffer_bytes));
+
     socket_open_ = true;
     return true;
 }

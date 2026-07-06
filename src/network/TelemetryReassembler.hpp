@@ -15,6 +15,7 @@ struct TelemetryReassemblerStats {
     std::uint64_t incomplete_messages = 0;
     std::uint64_t old_packets = 0;
     std::uint64_t chunk_mismatch_resets = 0;
+    std::uint64_t sender_restarts = 0;
 };
 
 // Rebuilds telemetry JSON messages from UDP datagrams. Onboard senders emit

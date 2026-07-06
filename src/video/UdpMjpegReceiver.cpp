@@ -94,6 +94,25 @@ bool UdpMjpegReceiver::open(std::uint16_t port)
         return false;
     }
 
+    // 24fps video arrives as ~500 chunk datagrams/s in per-frame bursts;
+    // the OS default receive buffer (64KB on Windows) holds barely two
+    // frames, so a brief consumer stall silently drops chunks. Best-effort:
+    // a failed enlargement is not fatal.
+    const int receive_buffer_bytes = 1 << 20;
+    (void)setsockopt(
+#ifdef _WIN32
+        static_cast<SOCKET>(socket_),
+        SOL_SOCKET,
+        SO_RCVBUF,
+        reinterpret_cast<const char*>(&receive_buffer_bytes),
+#else
+        static_cast<int>(socket_),
+        SOL_SOCKET,
+        SO_RCVBUF,
+        &receive_buffer_bytes,
+#endif
+        sizeof(receive_buffer_bytes));
+
     socket_open_ = true;
     return true;
 }
@@ -193,6 +212,7 @@ UdpMjpegReceiverStats UdpMjpegReceiver::stats() const
     output.incomplete_frames = reassembler_stats.incomplete_frames;
     output.old_packets = reassembler_stats.old_packets;
     output.chunk_mismatch_resets = reassembler_stats.chunk_mismatch_resets;
+    output.sender_restarts = reassembler_stats.sender_restarts;
     output.last_chunk_count = reassembler_stats.last_chunk_count;
     output.last_frame_bytes = reassembler_stats.last_frame_bytes;
     return output;

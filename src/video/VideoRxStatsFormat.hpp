@@ -26,6 +26,7 @@ inline std::string formatVideoStatsLine(
            << " malformed=" << stats.malformed_packets
            << " old_packets=" << stats.old_packets
            << " mismatch_resets=" << stats.chunk_mismatch_resets
+           << " restarts=" << stats.sender_restarts
            << " latest_overwritten=" << overwritten_frames
            << " last_chunks=" << stats.last_chunk_count
            << " last_bytes=" << stats.last_frame_bytes << "\n";

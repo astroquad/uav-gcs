@@ -3,6 +3,15 @@
 #include "video/VideoPacket.hpp"
 
 namespace gcs::network {
+namespace {
+
+// A message id this far below the current one cannot be a stale chunk of
+// the same stream; the sender restarted and its counter reset. Without
+// this the reassembler rejects every chunked message from a restarted
+// onboard process until the GCS itself restarts.
+constexpr std::uint32_t kSenderRestartGap = 1000;
+
+} // namespace
 
 std::optional<std::string> TelemetryReassembler::acceptDatagram(
     const std::uint8_t* data,
@@ -27,7 +36,16 @@ std::optional<std::string> TelemetryReassembler::acceptDatagram(
         return std::nullopt;
     }
 
-    if (current_message_id_ == 0 || header.frame_id > current_message_id_) {
+    const bool sender_restarted =
+        current_message_id_ != 0 &&
+        header.frame_id < current_message_id_ &&
+        current_message_id_ - header.frame_id > kSenderRestartGap;
+    if (sender_restarted) {
+        ++stats_.sender_restarts;
+    }
+
+    if (current_message_id_ == 0 || header.frame_id > current_message_id_ ||
+        sender_restarted) {
         noteIncompleteMessage();
         current_message_id_ = header.frame_id;
         expected_chunks_ = header.chunk_count;

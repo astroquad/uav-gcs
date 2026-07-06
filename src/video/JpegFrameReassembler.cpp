@@ -1,6 +1,15 @@
 #include "video/JpegFrameReassembler.hpp"
 
 namespace gcs::video {
+namespace {
+
+// A frame id this far below the current one cannot be a stale/reordered
+// chunk of the same stream; the sender restarted and its counter reset.
+// Without this the reassembler rejects every packet from a restarted
+// onboard process until the GCS itself restarts.
+constexpr std::uint32_t kSenderRestartGap = 1000;
+
+} // namespace
 
 std::optional<JpegFrame> JpegFrameReassembler::acceptPacket(
     const VideoPacketHeader& header,
@@ -12,7 +21,16 @@ std::optional<JpegFrame> JpegFrameReassembler::acceptPacket(
         return std::nullopt;
     }
 
-    if (current_frame_id_ == 0 || header.frame_id > current_frame_id_) {
+    const bool sender_restarted =
+        current_frame_id_ != 0 &&
+        header.frame_id < current_frame_id_ &&
+        current_frame_id_ - header.frame_id > kSenderRestartGap;
+    if (sender_restarted) {
+        ++stats_.sender_restarts;
+    }
+
+    if (current_frame_id_ == 0 || header.frame_id > current_frame_id_ ||
+        sender_restarted) {
         noteIncompleteFrame();
         current_frame_id_ = header.frame_id;
         current_timestamp_ms_ = header.timestamp_ms;

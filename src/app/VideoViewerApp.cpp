@@ -35,6 +35,7 @@ int VideoViewerApp::run(const VideoViewerOptions& options)
     auto last_stats_time = std::chrono::steady_clock::now();
     int displayed_frames_in_window = 0;
     bool received_any_frame = false;
+    std::uint64_t last_stats_packets = 0;
     while (true) {
         const int poll_timeout_ms = std::clamp(options.timeout_ms, 1, 50);
         const auto frame = receiver.receiveFrame(poll_timeout_ms);
@@ -63,7 +64,14 @@ int VideoViewerApp::run(const VideoViewerOptions& options)
         if (stats_elapsed.count() >= 2000) {
             const double display_fps = displayed_frames_in_window * 1000.0 /
                 static_cast<double>(stats_elapsed.count());
-            std::cout << video::formatVideoStatsLine(receiver.stats(), 0, display_fps);
+            const auto stats = receiver.stats();
+            std::cout << video::formatVideoStatsLine(stats, 0, display_fps);
+            if (stats.packets_received > 0 &&
+                stats.packets_received == last_stats_packets) {
+                std::cout << "[video-rx] WARNING: no packets since last report"
+                             " - check onboard sender / tailscale ping\n";
+            }
+            last_stats_packets = stats.packets_received;
             displayed_frames_in_window = 0;
             last_stats_time = now;
         }

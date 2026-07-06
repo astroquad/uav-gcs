@@ -103,7 +103,7 @@ Tailscale address (`gcs-laptop` in the shared `KnownHosts.hpp` table), so
 literal IPs. **Do not point onboard at its own IP** (`pi5`/`100.101.84.47`) —
 that sends to the Pi itself and the laptop GCS receives nothing; omit
 `--gcs-ip` to use the `gcs-laptop` default. Debug video arrives downscaled
-(728x544, sent at the full ~12 fps processing rate by default; onboard
+(728x544, sent at the full ~24 fps processing rate by default; onboard
 `--fps <n>` caps it); overlays stay aligned because the GCS scales telemetry
 camera-space coordinates onto the received frame.
 

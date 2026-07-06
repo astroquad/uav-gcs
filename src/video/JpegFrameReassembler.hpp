@@ -19,6 +19,7 @@ struct JpegReassemblerStats {
     std::uint64_t incomplete_frames = 0;
     std::uint64_t old_packets = 0;
     std::uint64_t chunk_mismatch_resets = 0;
+    std::uint64_t sender_restarts = 0;
     std::uint16_t last_chunk_count = 0;
     std::uint64_t last_frame_bytes = 0;
 };
