@@ -25,6 +25,12 @@ add_executable(test_known_hosts
 target_include_directories(test_known_hosts PRIVATE ../src)
 add_test(NAME known_hosts COMMAND test_known_hosts)
 
+add_executable(test_overlay_mapping
+    test_overlay_mapping.cpp
+)
+target_include_directories(test_overlay_mapping PRIVATE ../src)
+add_test(NAME overlay_mapping COMMAND test_overlay_mapping)
+
 if(TARGET gcs_video)
     add_executable(test_line_overlay
         test_line_overlay.cpp

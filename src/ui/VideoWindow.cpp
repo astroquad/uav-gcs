@@ -1,5 +1,7 @@
 #include "ui/VideoWindow.hpp"
 
+#include "overlay/OverlayMapping.hpp"
+
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
@@ -46,11 +48,29 @@ bool VideoWindow::showFrame(
     const video::JpegFrame& frame,
     const std::vector<overlay::OverlayPrimitive>& overlays)
 {
+    return showFrame(frame, overlays, 0, 0);
+}
+
+bool VideoWindow::showFrame(
+    const video::JpegFrame& frame,
+    const std::vector<overlay::OverlayPrimitive>& overlays,
+    int overlay_space_width,
+    int overlay_space_height)
+{
     const cv::Mat encoded(1, static_cast<int>(frame.data.size()), CV_8UC1, const_cast<std::uint8_t*>(frame.data.data()));
     cv::Mat image = cv::imdecode(encoded, cv::IMREAD_COLOR);
     if (image.empty()) {
         return false;
     }
+
+    // Overlay coordinates live in the onboard camera pixel space, which is
+    // larger than the decoded image when the sender downscales debug video.
+    const int space_width = overlay::resolveOverlaySpace(overlay_space_width, image.cols);
+    const int space_height = overlay::resolveOverlaySpace(overlay_space_height, image.rows);
+    const auto mapPoint = [&](const overlay::Point2f& point) {
+        return toPoint(overlay::mapToDisplay(
+            point, space_width, space_height, 0, 0, image.cols, image.rows));
+    };
 
     cv::putText(
         image,
@@ -67,8 +87,8 @@ bool VideoWindow::showFrame(
         case overlay::OverlayPrimitive::Type::Line:
             cv::line(
                 image,
-                toPoint(overlay.line.start),
-                toPoint(overlay.line.end),
+                mapPoint(overlay.line.start),
+                mapPoint(overlay.line.end),
                 toScalar(overlay.line.color),
                 overlay.line.thickness,
                 cv::LINE_AA);
@@ -76,8 +96,9 @@ bool VideoWindow::showFrame(
         case overlay::OverlayPrimitive::Type::Circle:
             cv::circle(
                 image,
-                toPoint(overlay.circle.center),
-                static_cast<int>(std::lround(overlay.circle.radius)),
+                mapPoint(overlay.circle.center),
+                std::max(1, static_cast<int>(std::lround(overlay::mapLength(
+                    overlay.circle.radius, space_width, image.cols)))),
                 toScalar(overlay.circle.color),
                 overlay.circle.thickness,
                 cv::LINE_AA);
@@ -86,7 +107,7 @@ bool VideoWindow::showFrame(
             cv::putText(
                 image,
                 overlay.text.text,
-                toPoint(overlay.text.origin),
+                mapPoint(overlay.text.origin),
                 cv::FONT_HERSHEY_SIMPLEX,
                 overlay.text.scale,
                 toScalar(overlay.text.color),

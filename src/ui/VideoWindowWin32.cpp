@@ -1,5 +1,7 @@
 #include "ui/VideoWindow.hpp"
 
+#include "overlay/OverlayMapping.hpp"
+
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -27,6 +29,10 @@ struct VideoWindowState {
     bool closed = false;
     int width = 0;
     int height = 0;
+    // Pixel space the overlay coordinates were produced in (telemetry camera
+    // dims); 0 falls back to the decoded frame dims.
+    int overlay_space_width = 0;
+    int overlay_space_height = 0;
     std::vector<std::uint8_t> bgra;
     std::wstring status;
     std::wstring overlay;
@@ -176,16 +182,22 @@ void drawOverlays(
     int draw_width,
     int draw_height)
 {
+    // Overlay coordinates live in the onboard camera pixel space, which is
+    // larger than the decoded frame when the sender downscales debug video.
+    const int space_width =
+        overlay::resolveOverlaySpace(state.overlay_space_width, state.width);
+    const int space_height =
+        overlay::resolveOverlaySpace(state.overlay_space_height, state.height);
     for (const auto& primitive : state.overlays) {
         switch (primitive.type) {
         case overlay::OverlayPrimitive::Type::Line:
-            drawOverlayLine(dc, primitive.line, draw_x, draw_y, draw_width, draw_height, state.width, state.height);
+            drawOverlayLine(dc, primitive.line, draw_x, draw_y, draw_width, draw_height, space_width, space_height);
             break;
         case overlay::OverlayPrimitive::Type::Circle:
-            drawOverlayCircle(dc, primitive.circle, draw_x, draw_y, draw_width, draw_height, state.width, state.height);
+            drawOverlayCircle(dc, primitive.circle, draw_x, draw_y, draw_width, draw_height, space_width, space_height);
             break;
         case overlay::OverlayPrimitive::Type::Text:
-            drawOverlayText(dc, primitive.text, draw_x, draw_y, draw_width, draw_height, state.width, state.height);
+            drawOverlayText(dc, primitive.text, draw_x, draw_y, draw_width, draw_height, space_width, space_height);
             break;
         }
     }
@@ -453,6 +465,15 @@ bool VideoWindow::showFrame(
     const video::JpegFrame& frame,
     const std::vector<overlay::OverlayPrimitive>& overlays)
 {
+    return showFrame(frame, overlays, 0, 0);
+}
+
+bool VideoWindow::showFrame(
+    const video::JpegFrame& frame,
+    const std::vector<overlay::OverlayPrimitive>& overlays,
+    int overlay_space_width,
+    int overlay_space_height)
+{
     auto& state = *static_cast<VideoWindowState*>(native_state_);
     if (state.closed) {
         return false;
@@ -467,6 +488,8 @@ bool VideoWindow::showFrame(
 
     state.width = width;
     state.height = height;
+    state.overlay_space_width = overlay_space_width;
+    state.overlay_space_height = overlay_space_height;
     state.bgra = std::move(pixels);
     state.overlays = overlays;
     state.overlay = widen(

@@ -101,7 +101,13 @@ int AstroquadGcsApp::run(const AstroquadGcsOptions& options)
                 overlays.insert(overlays.end(), marker_overlays.begin(), marker_overlays.end());
             }
 
-            if (!window.showFrame(*frame, overlays)) {
+            // Overlay coordinates are in the onboard camera pixel space
+            // (telemetry camera dims); the received JPEG may be downscaled.
+            if (!window.showFrame(
+                    *frame,
+                    overlays,
+                    marker_frame ? marker_frame->width : 0,
+                    marker_frame ? marker_frame->height : 0)) {
                 std::cerr << "video display warning: failed to decode JPEG frame\n";
             } else {
                 ++displayed_frames_in_window;
