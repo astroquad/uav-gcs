@@ -205,6 +205,11 @@ If packets still do not arrive:
 - Watch the `[video-rx]` stats line from `uav-gcs-video`: `packets=0` means
   datagrams never reach the socket (firewall/routing); `packets>0` with
   `completed=0` means chunk loss or reassembly issues.
+- `incomplete` growing much faster than `completed` means the path cannot
+  carry the video bitrate (LTE-hotspot uplink, DERP relay). Check
+  `tailscale ping` for `direct` vs `via DERP`, then run onboard with
+  `--fps 6 --telemetry-fps 6` (see the uav-onboard README "Constrained
+  links" recipe, ~1.2 Mbit/s total).
 - As a last resort, capture on the Tailscale interface with `pktmon` or
   Wireshark to see whether datagrams arrive at the adapter at all.
 
