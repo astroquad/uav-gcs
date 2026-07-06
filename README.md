@@ -84,15 +84,25 @@ Use this for current onboard development:
 ./build/astroquad-gcs --config config
 ```
 
-Onboard examples:
+Onboard examples — the onboard default destination is already this laptop's
+Tailscale address (`gcs-laptop` in the shared `KnownHosts.hpp` table), so
+`--gcs-ip` is only needed for WSL/SITL or non-Tailscale setups:
 
 ```bash
-./build/vision_debug_node --config config --line-only --line-mode dark_on_light --video
+# Raspberry Pi over Tailscale (no IP needed)
+./build/vision_debug_node --config config --line-mode light_on_dark --video
+
+# WSL/SITL (Windows host IP differs from the Tailscale address)
 ./build/line_follow_node --config config --target sitl --vision gazebo --line-mode dark_on_light --video --gcs-ip <gcs-ip>
 ./build/astroquad-onboard --config config --target sitl --vision gazebo \
   --world grid --line-mode dark_on_light --marker-count 4 \
   --video --gcs-ip <gcs-ip>
 ```
+
+`--gcs-ip` accepts known names (`gcs-laptop`, `pi5`, `broadcast`) as well as
+literal IPs. Debug video arrives downscaled (728x544 @ 10 fps by default);
+overlays stay aligned because the GCS scales telemetry camera-space
+coordinates onto the received frame.
 
 Expected overlays:
 
