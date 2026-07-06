@@ -153,7 +153,8 @@ std::optional<JpegFrame> UdpMjpegReceiver::receiveFrame(int timeout_ms)
             return std::nullopt;
         }
 
-        std::array<std::uint8_t, kVideoHeaderSize + kVideoMaxPayloadSize> packet {};
+        // Sized for the largest datagram: an FEC parity packet.
+        std::array<std::uint8_t, kVideoHeaderSize + kVideoFecPayloadSize> packet {};
         const int received = recvfrom(
 #ifdef _WIN32
             static_cast<SOCKET>(socket_),
@@ -213,6 +214,7 @@ UdpMjpegReceiverStats UdpMjpegReceiver::stats() const
     output.old_packets = reassembler_stats.old_packets;
     output.chunk_mismatch_resets = reassembler_stats.chunk_mismatch_resets;
     output.sender_restarts = reassembler_stats.sender_restarts;
+    output.fec_recovered_chunks = reassembler_stats.fec_recovered_chunks;
     output.last_chunk_count = reassembler_stats.last_chunk_count;
     output.last_frame_bytes = reassembler_stats.last_frame_bytes;
     return output;

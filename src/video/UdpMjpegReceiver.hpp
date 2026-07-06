@@ -16,6 +16,7 @@ struct UdpMjpegReceiverStats {
     std::uint64_t old_packets = 0;
     std::uint64_t chunk_mismatch_resets = 0;
     std::uint64_t sender_restarts = 0;
+    std::uint64_t fec_recovered_chunks = 0;
     std::uint16_t last_chunk_count = 0;
     std::uint64_t last_frame_bytes = 0;
 };
