@@ -19,6 +19,12 @@ target_include_directories(test_telemetry_reassembler PRIVATE ../src)
 target_link_libraries(test_telemetry_reassembler PRIVATE gcs_core)
 add_test(NAME telemetry_reassembler COMMAND test_telemetry_reassembler)
 
+add_executable(test_known_hosts
+    test_known_hosts.cpp
+)
+target_include_directories(test_known_hosts PRIVATE ../src)
+add_test(NAME known_hosts COMMAND test_known_hosts)
+
 if(TARGET gcs_video)
     add_executable(test_line_overlay
         test_line_overlay.cpp

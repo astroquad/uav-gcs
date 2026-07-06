@@ -1,6 +1,7 @@
 [onboard]
-# Raspberry Pi 5 Tailscale IP (effectively static; see src/common/KnownHosts.hpp).
-ip = "100.101.84.47"
+# Raspberry Pi 5 over Tailscale. Known names are resolved through
+# src/common/KnownHosts.hpp; a literal IP also works.
+ip = "pi5"
 telemetry_port = 14550
 command_port = 14551
 video_port = 5600
