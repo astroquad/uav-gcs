@@ -162,27 +162,25 @@ int AstroquadGcsApp::run(const AstroquadGcsOptions& options)
                     "check onboard sender / tailscale ping\n";
             }
             last_video_packets = video_stats.packets_received;
+            // Cycle 23: with telemetry present the detail panel leads with the
+            // mission-aware "=== Mission ===" section; otherwise a network-only
+            // placeholder. Both share the video-stats footer and the same
+            // window/stdout sink, so build the body then append + emit once.
+            std::string detail;
             if (const auto latest = telemetry_store.latest()) {
-                // Cycle 23: mission-aware overload so the detail panel leads
-                // with the "=== Mission ===" section before the per-frame
-                // vision dump.
-                auto detail = telemetry::formatVisionLog(
+                detail = telemetry::formatVisionLog(
                     *latest, marker_tracker.latestMission(), telemetry_worker.stats());
-                detail += video_line;
-                if (!log_window.update(grid_text, markers_text, detail)) {
-                    std::cout << grid_text << markers_text << detail;
-                }
             } else {
                 const auto stats = telemetry_worker.stats();
-                std::string detail =
+                detail =
                     "=== Network ===\n"
                     "[vision] no telemetry packets yet packets=" +
                     std::to_string(stats.received_packets) +
                     " dropped=" + std::to_string(stats.dropped_packets) + "\n";
-                detail += video_line;
-                if (!log_window.update(grid_text, markers_text, detail)) {
-                    std::cout << grid_text << markers_text << detail;
-                }
+            }
+            detail += video_line;
+            if (!log_window.update(grid_text, markers_text, detail)) {
+                std::cout << grid_text << markers_text << detail;
             }
             last_log_time = now;
         }

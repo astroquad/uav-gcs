@@ -25,27 +25,6 @@ GridMapCoord normalizedEdgeEnd(GridMapCoord a, GridMapCoord b)
     return b;
 }
 
-GridMapCoord headingVector(const std::string& heading)
-{
-    // Cycle 13: reverted to screen convention — north = -y, south = +y.
-    // First grid node is (0,0), subsequent nodes (0,-1), (0,-2)... up the
-    // column; vertiport sits at (0,+1). canvasRow uses (y - min_y) * 2 so a
-    // smaller y still renders at the top of the canvas (north is visual up).
-    if (heading == "north") {
-        return {0, -1};
-    }
-    if (heading == "east") {
-        return {1, 0};
-    }
-    if (heading == "south") {
-        return {0, 1};
-    }
-    if (heading == "west") {
-        return {-1, 0};
-    }
-    return {0, -1};
-}
-
 void put(std::vector<std::string>& canvas, int row, int col, char value)
 {
     if (row < 0 || col < 0 ||
@@ -94,8 +73,8 @@ bool GridMapTracker::observe(const protocol::GridNodeTelemetry& node)
     // old node disappears.
     auto coord_it = nodes_.find(coord);
     if (coord_it != nodes_.end() && node.id != 0 &&
-        coord_it->second.telemetry.id != 0 &&
-        coord_it->second.telemetry.id != node.id) {
+        coord_it->second.id != 0 &&
+        coord_it->second.id != node.id) {
         return false;
     }
     if (has_current_ &&
@@ -106,20 +85,11 @@ bool GridMapTracker::observe(const protocol::GridNodeTelemetry& node)
     if (node.id != 0) {
         observed_ids_.insert(node.id);
     }
-    auto& entry = nodes_[coord];
-    entry.telemetry = node;
-    if (entry.order == 0) {
-        entry.order = next_order_++;
-    }
+    nodes_[coord] = node;
 
     if (node.updates_current) {
         current_coord_ = coord;
         has_current_ = true;
-    }
-    if ((!has_first_ || node.first_node) && node.updates_current) {
-        first_coord_ = coord;
-        first_node_ = node;
-        has_first_ = true;
     }
     return true;
 }
@@ -224,7 +194,7 @@ std::string GridMapTracker::render() const
             const auto found = nodes_.find(arrow_coord);
             heading = (found == nodes_.end())
                 ? std::string("unknown")
-                : found->second.telemetry.arrival_heading;
+                : found->second.arrival_heading;
         }
         put(canvas, canvasRow(arrow_coord.y), canvasCol(arrow_coord.x),
             headingArrow(heading));
@@ -243,7 +213,7 @@ std::string GridMapTracker::render() const
         const auto found = nodes_.find(current);
         heading_label = (found == nodes_.end())
             ? std::string("unknown")
-            : found->second.telemetry.arrival_heading;
+            : found->second.arrival_heading;
     }
     stream << "[grid-map] nodes=" << nodes_.size();
     if (hide_drone_arrow_) {
@@ -259,20 +229,6 @@ std::string GridMapTracker::render() const
         stream << row << "\n";
     }
     return stream.str();
-}
-
-void GridMapTracker::observeDronePosition(bool valid, double grid_offset_x, double grid_offset_y)
-{
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (hide_drone_arrow_) {
-        has_drone_pos_ = false;
-        drone_offset_x_ = 0.0;
-        drone_offset_y_ = 0.0;
-        return;
-    }
-    has_drone_pos_ = valid;
-    drone_offset_x_ = valid ? grid_offset_x : 0.0;
-    drone_offset_y_ = valid ? grid_offset_y : 0.0;
 }
 
 void GridMapTracker::observeMission(const protocol::MissionTelemetry& mission)
@@ -297,7 +253,6 @@ void GridMapTracker::observeMission(const protocol::MissionTelemetry& mission)
         hide_drone_arrow_ = true;
         has_mission_heading_ = false;
         has_mission_drone_coord_ = false;
-        has_drone_pos_ = false;
         return;
     }
     hide_drone_arrow_ = false;
@@ -318,14 +273,7 @@ void GridMapTracker::reset()
     edges_.clear();
     observed_ids_.clear();
     current_coord_ = {};
-    first_coord_ = {};
-    first_node_ = {};
     has_current_ = false;
-    has_first_ = false;
-    next_order_ = 1;
-    has_drone_pos_ = false;
-    drone_offset_x_ = 0.0;
-    drone_offset_y_ = 0.0;
     has_mission_heading_ = false;
     mission_heading_.clear();
     has_mission_drone_coord_ = false;
@@ -344,15 +292,6 @@ std::size_t GridMapTracker::nodeCount() const
 GridMapCoord GridMapTracker::coordFor(const protocol::GridNodeTelemetry& node)
 {
     return {node.x, node.y};
-}
-
-GridMapCoord GridMapTracker::startCoordFor(const protocol::GridNodeTelemetry& first_node)
-{
-    const auto vector = headingVector(first_node.arrival_heading);
-    return {
-        first_node.x - vector.x,
-        first_node.y - vector.y,
-    };
 }
 
 char GridMapTracker::headingArrow(const std::string& heading)

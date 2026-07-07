@@ -54,10 +54,6 @@ bool TelemetryWorker::start(
             // state before grid_node so one packet cannot add after freeze.
             grid_map.observeMission(parsed->mission);
             grid_map.observe(parsed->vision.grid_node);
-            grid_map.observeDronePosition(
-                parsed->vision.drone_position.valid,
-                parsed->vision.drone_position.grid_offset_x,
-                parsed->vision.drone_position.grid_offset_y);
             marker_tracker.observe(parsed->mission);
         }
     });
