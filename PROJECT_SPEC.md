@@ -1,9 +1,10 @@
 # PROJECT_SPEC.md — uav-gcs
 
-> 제24회 한국로봇항공기경연대회 중급부문 멀티콥터형 드론 실내 조난자 탐색 GCS 소프트웨어 기준 문서  
+> 제24회 한국로봇항공기경연대회 중급부문 멀티콥터형 드론 실내 조난자 탐색 GCS 소프트웨어 기준 문서
+>
 > **이 문서는 팀원과 코딩 에이전트가 공통으로 참조하는 Single Source of Truth입니다.**
 
-최종 수정: 2026-05-21
+최종 검증: 2026-07-18
 
 ## 1. 프로젝트 목적
 
@@ -41,7 +42,7 @@ direction, marker commit은 모두 onboard가 결정한다.
 |---|---|---|
 | Basic telemetry receiver | 구현됨 | `src/telemetry_main.cpp`, `src/network/UdpTelemetryReceiver.*` |
 | Network config parsing | 구현됨 | `src/common/NetworkConfig.*` |
-| Telemetry v1.8 parser | 구현됨 | `src/protocol/TelemetryMessage.*` |
+| Telemetry v1.13 document-compatible parser | 구현됨 | `src/protocol/TelemetryMessage.*` |
 | Packet sequence stats | 구현됨 | `src/protocol/TelemetryMessage.*` |
 | Video-only viewer | 구현됨 | `src/video_main.cpp`, `src/app/VideoViewerApp.*` |
 | Main GCS receiver | 구현됨 | `src/main.cpp`, `src/app/AstroquadGcsApp.*` |
@@ -57,7 +58,7 @@ direction, marker commit은 모두 onboard가 결정한다.
 | `vision.drone_position` parse/store | 구현됨 | parser/app path |
 | Mission command sender | 미구현 | planned |
 | Full drone/mission dashboard | 미구현 | planned |
-| Persistent log subsystem | 미구현 | planned |
+| GCS persistent disk logger | 미구현 | onboard flight log가 현재 분석 기준 |
 
 현재 ASCII grid map은 committed `vision.grid_node`를 기준으로 그린다.
 `vision.drone_position`은 파싱하고 `GridMapTracker`에 전달하지만, renderer는
@@ -116,9 +117,10 @@ Raspberry Pi 5 + IMX296 mono GS camera + Pixhawk 6C Mini
   onboard mission이 승인한 최신 committed node다.
 - GCS는 node id/coordinate 중복을 무시한다.
 - GCS는 marker 발견을 표시할 뿐 marker commit 여부를 최종 판단하지 않는다.
-- 현재 richer mission object는 telemetry schema에 준비되어 있지만
-  `GcsTelemetryPublisher` path에서 아직 채워지지 않는다. Grid state detail은
-  onboard console log가 더 정확하다.
+- `astroquad-onboard`는 현재 `mission.state`, elapsed time, marker expected/found,
+  revisit 상태, completion/landing 결과 등 구조화된 mission object를 채운다.
+- GCS mission pane은 빠른 관제용이다. 사후 판정은 onboard 실행별
+  `meta.json`, `events.jsonl`, `frames.csv`를 기준으로 한다.
 
 ## 7. UI 구조
 
@@ -163,7 +165,7 @@ framework is committed in current code.
 - `uav-onboard/docs/PROTOCOL.md`
 - `uav-gcs/docs/PROTOCOL.md`
 
-현재 문서 version은 v1.9이고 JSON top-level `protocol_version`은 integer `1`이다.
+현재 문서 version은 v1.13이고 JSON top-level `protocol_version`은 integer `1`이다.
 
 Parser requirements:
 
@@ -213,7 +215,7 @@ Key files:
 | `src/app/AstroquadGcsApp.*` | main GCS composition and UI/log orchestration |
 | `src/app/TelemetryWorker.*` | telemetry receive thread, store/grid/marker tracker updates |
 | `src/app/VideoReceiveWorker.*` | MJPEG receive thread and latest-frame handoff |
-| `src/protocol/TelemetryMessage.*` | v1.8 telemetry parse and sequence stats |
+| `src/protocol/TelemetryMessage.*` | v1.13 문서 호환 telemetry parse와 sequence stats |
 | `src/telemetry/GridMapTracker.*` | committed local grid map rendering/dedup |
 | `src/telemetry/VisionLogFormatter.*` | human-readable vision/grid logs |
 | `src/overlay/*` | backend-independent overlay primitives |
@@ -285,11 +287,11 @@ failsafe paths.
 | 순서 | 작업 | 이유/검증 |
 |---:|---|---|
 | 1 | `astroquad-gcs` 안정화 유지 | line/grid mission tuning의 관제 도구 |
-| 2 | Grid mission telemetry display 확장 | current console-only mission state를 GCS에 구조화 |
-| 3 | Mission/drone state model 추가 | dashboard/command ACK 기반 |
-| 4 | Command sender channel 구현 | START/ABORT/EMERGENCY LAND/backend 선택 |
-| 5 | Persistent log/replay 확장 | SITL/실비행 재현성 |
-| 6 | Full dashboard framework 결정 | 최종 운용 UI |
+| 2 | 실비행 중 mission/vision/network 표시 신뢰성 유지 | onboard 로그와 현장 관찰의 빠른 보조 수단 |
+| 3 | Flight-log 분석/replay 연동 | onboard `meta/events/frames` 기반 재현성 |
+| 4 | GCS persistent disk logger 필요성 검토 | 화면 녹화 의존 축소; onboard 로그와 중복 방지 |
+| 5 | Command sender channel 안전 설계 | 현재 미구현; START/ABORT/EMERGENCY LAND 권한·ACK 정의 선행 |
+| 6 | Full dashboard framework 결정 | 실비행 요구가 안정된 뒤 최종 운용 UI 결정 |
 
 ## 14. 금지 / 주의
 

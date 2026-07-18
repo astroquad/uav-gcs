@@ -2,6 +2,10 @@
 
 Ground control software for the Astroquad indoor/grid UAV search mission.
 
+Operational documentation verified against the 2026-07-18 source/protocol
+baseline. For the Korean real-flight handover and log-to-Codex workflow, see
+[`../development-log/REAL_FLIGHT_ONBOARDING.md`](../development-log/REAL_FLIGHT_ONBOARDING.md).
+
 The current GCS is an observation and tuning tool: it receives onboard
 telemetry, optional raw MJPEG debug video, draws overlays from onboard metadata,
 and renders vision/grid logs. It does not run ArUco, line, intersection, or
@@ -14,7 +18,8 @@ mission decision logic locally.
 - `tools/`: mock onboard and log replay utilities
 - `tests/`: unit tests
 - `docs/`: protocol reference
-- `logs/`: runtime logs
+- `logs/`: local development artifacts; the main GCS does not yet persist a
+  complete flight log
 
 ## Executables
 
@@ -102,10 +107,11 @@ Tailscale address (`gcs-laptop` in the shared `KnownHosts.hpp` table), so
 `--gcs-ip` accepts known names (`gcs-laptop`, `pi5`, `broadcast`) as well as
 literal IPs. **Do not point onboard at its own IP** (`pi5`/`100.101.84.47`) —
 that sends to the Pi itself and the laptop GCS receives nothing; omit
-`--gcs-ip` to use the `gcs-laptop` default. Debug video arrives downscaled
-(728x544, sent at the full ~24 fps processing rate by default; onboard
-`--fps <n>` caps it); overlays stay aligned because the GCS scales telemetry
-camera-space coordinates onto the received frame.
+`--gcs-ip` to use the `gcs-laptop` default. The real runtime sends the
+LTE-sized 600px/q55/12fps stream with XOR FEC and 6fps frame telemetry by
+default; onboard `--fps <n>` overrides the video cap. Overlays stay aligned
+because the GCS scales telemetry camera-space coordinates onto the received
+frame.
 
 Expected overlays:
 
@@ -129,6 +135,12 @@ The GCS grid map consumes `vision.grid_node` only after onboard commits a node.
 tolerance; GCS deduplicates it. `vision.drone_position` is parsed and stored,
 but the current ASCII map renders the heading arrow at the latest committed
 node rather than at a fractional sub-cell position.
+
+`astroquad-onboard` also sends structured mission state, elapsed time, marker
+progress, revisit status, and completion/landing results. The GCS displays these
+for live observation. Post-flight truth remains the onboard per-run
+`meta.json`, `events.jsonl`, and `frames.csv`; record the GCS/field view
+separately because the main GCS has no complete persistent logger yet.
 
 If the camera window says `waiting for video stream...` while logs update, the
 onboard process is probably running telemetry-only. Add `--video` to enable raw

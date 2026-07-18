@@ -1,5 +1,8 @@
 # astroquad-gcs 아키텍처 개요
 
+> 현재 소스/protocol v1.13 기준 검토: 2026-07-18. 실비행 운영과 사후 로그
+> 분석은 [`../development-log/REAL_FLIGHT_ONBOARDING.md`](../development-log/REAL_FLIGHT_ONBOARDING.md)를 따른다.
+
 이 문서는 `astroquad-gcs` 실행 파일이 어떻게 구성되어 있고, 온보드(드론)에서
 보낸 텔레메트리/영상 패킷이 어떤 경로로 흘러서 화면에 그려지는지를 처음 읽는
 사람이 한눈에 파악할 수 있도록 정리한 코드 리딩 가이드다.
@@ -184,7 +187,7 @@ telemetry_worker.stop()                             // 텔레메트리 수신 �
 worker thread:
   while (running):
       UdpTelemetryReceiver.receive(payload, timeout)
-      parsed = protocol::parseTelemetryJson(payload)     // v1.8 스키마 파싱
+      parsed = protocol::parseTelemetryJson(payload)     // v1.13 문서 호환 스키마 파싱
       stats_.observe(parsed)                              // 패킷 시퀀스 통계
       telemetry_store.observe(parsed)                     // 프레임 매칭용 저장
       grid_map_tracker.observeMission(parsed.mission)     // 미션 종료 처리
@@ -233,7 +236,7 @@ worker thread:
 
 | 객체 | 역할 |
 |---|---|
-| `TelemetryMessage` (`parseTelemetryJson`) | v1.8 텔레메트리 JSON을 구조체로 파싱. 알 수 없는 필드는 무시 |
+| `TelemetryMessage` (`parseTelemetryJson`) | v1.13 문서 호환 텔레메트리 JSON을 구조체로 파싱. 알 수 없는 필드는 무시 |
 | `TelemetryStats` | 시퀀스 번호 추적으로 drop/duplicate/out-of-order 패킷 카운트 |
 
 #### --- src/telemetry/ ---
